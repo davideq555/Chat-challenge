@@ -1,37 +1,32 @@
-from fastapi import APIRouter, HTTPException, status, Query
+from fastapi import APIRouter, HTTPException, status, Query, Depends
 from typing import List
 from datetime import datetime
+from sqlalchemy.orm import Session
 
 from app.schemas.message import MessageCreate, MessageUpdate, MessageResponse
 from app.models.message import Message
+from app.database import get_db
 
 router = APIRouter(
     prefix="/messages",
     tags=["messages"]
 )
 
-# Almacenamiento temporal en memoria (luego se reemplazará con base de datos)
-messages_db = {}
-message_id_counter = {"value": 1}
-
 @router.post("/", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
-async def create_message(message_data: MessageCreate):
+async def create_message(message_data: MessageCreate, db: Session = Depends(get_db)):
     """Crear un nuevo mensaje"""
-    # TODO: Validar que room_id y user_id existan (cuando tengamos BD)
+    # TODO: Validar que room_id y user_id existan
 
-    # Crear mensaje
-    message = {
-        "id": message_id_counter["value"],
-        "room_id": message_data.room_id,
-        "user_id": message_data.user_id,
-        "content": message_data.content,
-        "created_at": datetime.now(),
-        "updated_at": None,
-        "is_deleted": False
-    }
+    message = Message(
+        room_id=message_data.room_id,
+        user_id=message_data.user_id,
+        content=message_data.content,
+        is_deleted=False
+    )
 
-    messages_db[message_id_counter["value"]] = message
-    message_id_counter["value"] += 1
+    db.add(message)
+    db.commit()
+    db.refresh(message)
 
     return message
 
@@ -39,7 +34,8 @@ async def create_message(message_data: MessageCreate):
 async def get_messages(
     room_id: int = Query(None, description="Filtrar por sala de chat"),
     user_id: int = Query(None, description="Filtrar por usuario"),
-    include_deleted: bool = Query(False, description="Incluir mensajes eliminados")
+    include_deleted: bool = Query(False, description="Incluir mensajes eliminados"),
+    db: Session = Depends(get_db)
 ):
     """
     Obtener mensajes con filtros opcionales
@@ -48,27 +44,27 @@ async def get_messages(
     - **user_id**: Filtrar por autor
     - **include_deleted**: Incluir mensajes marcados como eliminados
     """
-    messages = list(messages_db.values())
+    query = db.query(Message)
 
     # Aplicar filtros
     if room_id is not None:
-        messages = [msg for msg in messages if msg["room_id"] == room_id]
+        query = query.filter(Message.room_id == room_id)
 
     if user_id is not None:
-        messages = [msg for msg in messages if msg["user_id"] == user_id]
+        query = query.filter(Message.user_id == user_id)
 
     if not include_deleted:
-        messages = [msg for msg in messages if not msg["is_deleted"]]
+        query = query.filter(Message.is_deleted == False)
 
     # Ordenar por fecha de creación (más recientes primero)
-    messages.sort(key=lambda x: x["created_at"], reverse=True)
+    query = query.order_by(Message.created_at.desc())
 
-    return messages
+    return query.all()
 
 @router.get("/{message_id}", response_model=MessageResponse)
-async def get_message(message_id: int):
+async def get_message(message_id: int, db: Session = Depends(get_db)):
     """Obtener un mensaje por ID"""
-    message = messages_db.get(message_id)
+    message = db.query(Message).filter(Message.id == message_id).first()
     if not message:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -77,9 +73,9 @@ async def get_message(message_id: int):
     return message
 
 @router.put("/{message_id}", response_model=MessageResponse)
-async def update_message(message_id: int, message_data: MessageUpdate):
+async def update_message(message_id: int, message_data: MessageUpdate, db: Session = Depends(get_db)):
     """Actualizar el contenido de un mensaje"""
-    message = messages_db.get(message_id)
+    message = db.query(Message).filter(Message.id == message_id).first()
     if not message:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -87,27 +83,34 @@ async def update_message(message_id: int, message_data: MessageUpdate):
         )
 
     # No permitir editar mensajes eliminados
-    if message["is_deleted"]:
+    if message.is_deleted:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot edit deleted message"
         )
 
     # Actualizar contenido y timestamp
-    message["content"] = message_data.content
-    message["updated_at"] = datetime.now()
+    message.content = message_data.content
+    message.updated_at = datetime.now()
+
+    db.commit()
+    db.refresh(message)
 
     return message
 
 @router.delete("/{message_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_message(message_id: int, soft_delete: bool = Query(True, description="Soft delete (marcar como eliminado) o hard delete")):
+async def delete_message(
+    message_id: int,
+    soft_delete: bool = Query(True, description="Soft delete (marcar como eliminado) o hard delete"),
+    db: Session = Depends(get_db)
+):
     """
     Eliminar un mensaje
 
     - **soft_delete=True**: Marca el mensaje como eliminado (por defecto)
     - **soft_delete=False**: Elimina permanentemente el mensaje
     """
-    message = messages_db.get(message_id)
+    message = db.query(Message).filter(Message.id == message_id).first()
     if not message:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -116,46 +119,48 @@ async def delete_message(message_id: int, soft_delete: bool = Query(True, descri
 
     if soft_delete:
         # Soft delete: marcar como eliminado
-        message["is_deleted"] = True
-        message["updated_at"] = datetime.now()
+        message.is_deleted = True
+        message.updated_at = datetime.now()
+        db.commit()
     else:
         # Hard delete: eliminar completamente
-        del messages_db[message_id]
+        db.delete(message)
+        db.commit()
 
 @router.post("/{message_id}/restore", response_model=MessageResponse)
-async def restore_message(message_id: int):
+async def restore_message(message_id: int, db: Session = Depends(get_db)):
     """Restaurar un mensaje eliminado (soft delete)"""
-    message = messages_db.get(message_id)
+    message = db.query(Message).filter(Message.id == message_id).first()
     if not message:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Message not found"
         )
 
-    if not message["is_deleted"]:
+    if not message.is_deleted:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Message is not deleted"
         )
 
-    message["is_deleted"] = False
-    message["updated_at"] = datetime.now()
+    message.is_deleted = False
+    message.updated_at = datetime.now()
+
+    db.commit()
+    db.refresh(message)
 
     return message
 
 @router.get("/room/{room_id}/latest", response_model=List[MessageResponse])
 async def get_latest_messages(
     room_id: int,
-    limit: int = Query(50, ge=1, le=100, description="Número de mensajes recientes")
+    limit: int = Query(50, ge=1, le=100, description="Número de mensajes recientes"),
+    db: Session = Depends(get_db)
 ):
     """Obtener los últimos N mensajes de una sala"""
-    messages = [
-        msg for msg in messages_db.values()
-        if msg["room_id"] == room_id and not msg["is_deleted"]
-    ]
-
-    # Ordenar por fecha descendente y limitar
-    messages.sort(key=lambda x: x["created_at"], reverse=True)
-    messages = messages[:limit]
+    messages = db.query(Message).filter(
+        Message.room_id == room_id,
+        Message.is_deleted == False
+    ).order_by(Message.created_at.desc()).limit(limit).all()
 
     return messages
