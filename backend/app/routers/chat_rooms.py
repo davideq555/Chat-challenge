@@ -12,25 +12,23 @@ router = APIRouter(
 
 # Almacenamiento temporal en memoria (luego se reemplazará con base de datos)
 chat_rooms_db = {}
-chat_room_id_counter = 1
+room_id_counter = {"value": 1}
 
 @router.post("/", response_model=ChatRoomResponse, status_code=status.HTTP_201_CREATED)
 async def create_chat_room(room_data: ChatRoomCreate):
     """Crear una nueva sala de chat"""
-    global chat_room_id_counter
-
     # Crear sala de chat
-    chat_room = ChatRoom(
-        id=chat_room_id_counter,
-        name=room_data.name,
-        is_group=room_data.is_group,
-        created_at=datetime.now()
-    )
+    chat_room = {
+        "id": room_id_counter["value"],
+        "name": room_data.name,
+        "is_group": room_data.is_group,
+        "created_at": datetime.now()
+    }
 
-    chat_rooms_db[chat_room_id_counter] = chat_room
-    chat_room_id_counter += 1
+    chat_rooms_db[room_id_counter["value"]] = chat_room
+    room_id_counter["value"] += 1
 
-    return chat_room.to_dict()
+    return chat_room
 
 @router.get("/", response_model=List[ChatRoomResponse])
 async def get_chat_rooms(is_group: bool = None):
@@ -43,9 +41,9 @@ async def get_chat_rooms(is_group: bool = None):
 
     # Filtrar por tipo si se especifica
     if is_group is not None:
-        rooms = [room for room in rooms if room.is_group == is_group]
+        rooms = [room for room in rooms if room["is_group"] == is_group]
 
-    return [room.to_dict() for room in rooms]
+    return rooms
 
 @router.get("/{room_id}", response_model=ChatRoomResponse)
 async def get_chat_room(room_id: int):
@@ -56,7 +54,7 @@ async def get_chat_room(room_id: int):
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Chat room not found"
         )
-    return chat_room.to_dict()
+    return chat_room
 
 @router.put("/{room_id}", response_model=ChatRoomResponse)
 async def update_chat_room(room_id: int, room_data: ChatRoomUpdate):
@@ -70,12 +68,12 @@ async def update_chat_room(room_id: int, room_data: ChatRoomUpdate):
 
     # Actualizar campos si se proporcionan
     if room_data.name is not None:
-        chat_room.name = room_data.name
+        chat_room["name"] = room_data.name
 
     if room_data.is_group is not None:
-        chat_room.is_group = room_data.is_group
+        chat_room["is_group"] = room_data.is_group
 
-    return chat_room.to_dict()
+    return chat_room
 
 @router.delete("/{room_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_chat_room(room_id: int):

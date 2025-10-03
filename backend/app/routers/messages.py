@@ -12,29 +12,28 @@ router = APIRouter(
 
 # Almacenamiento temporal en memoria (luego se reemplazará con base de datos)
 messages_db = {}
-message_id_counter = 1
+message_id_counter = {"value": 1}
 
 @router.post("/", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
 async def create_message(message_data: MessageCreate):
     """Crear un nuevo mensaje"""
-    global message_id_counter
-
     # TODO: Validar que room_id y user_id existan (cuando tengamos BD)
 
     # Crear mensaje
-    message = Message(
-        id=message_id_counter,
-        room_id=message_data.room_id,
-        user_id=message_data.user_id,
-        content=message_data.content,
-        created_at=datetime.now(),
-        is_deleted=False
-    )
+    message = {
+        "id": message_id_counter["value"],
+        "room_id": message_data.room_id,
+        "user_id": message_data.user_id,
+        "content": message_data.content,
+        "created_at": datetime.now(),
+        "updated_at": None,
+        "is_deleted": False
+    }
 
-    messages_db[message_id_counter] = message
-    message_id_counter += 1
+    messages_db[message_id_counter["value"]] = message
+    message_id_counter["value"] += 1
 
-    return message.to_dict()
+    return message
 
 @router.get("/", response_model=List[MessageResponse])
 async def get_messages(
@@ -53,18 +52,18 @@ async def get_messages(
 
     # Aplicar filtros
     if room_id is not None:
-        messages = [msg for msg in messages if msg.room_id == room_id]
+        messages = [msg for msg in messages if msg["room_id"] == room_id]
 
     if user_id is not None:
-        messages = [msg for msg in messages if msg.user_id == user_id]
+        messages = [msg for msg in messages if msg["user_id"] == user_id]
 
     if not include_deleted:
-        messages = [msg for msg in messages if not msg.is_deleted]
+        messages = [msg for msg in messages if not msg["is_deleted"]]
 
     # Ordenar por fecha de creación (más recientes primero)
-    messages.sort(key=lambda x: x.created_at, reverse=True)
+    messages.sort(key=lambda x: x["created_at"], reverse=True)
 
-    return [msg.to_dict() for msg in messages]
+    return messages
 
 @router.get("/{message_id}", response_model=MessageResponse)
 async def get_message(message_id: int):
@@ -75,7 +74,7 @@ async def get_message(message_id: int):
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Message not found"
         )
-    return message.to_dict()
+    return message
 
 @router.put("/{message_id}", response_model=MessageResponse)
 async def update_message(message_id: int, message_data: MessageUpdate):
@@ -88,17 +87,17 @@ async def update_message(message_id: int, message_data: MessageUpdate):
         )
 
     # No permitir editar mensajes eliminados
-    if message.is_deleted:
+    if message["is_deleted"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot edit deleted message"
         )
 
     # Actualizar contenido y timestamp
-    message.content = message_data.content
-    message.updated_at = datetime.now()
+    message["content"] = message_data.content
+    message["updated_at"] = datetime.now()
 
-    return message.to_dict()
+    return message
 
 @router.delete("/{message_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_message(message_id: int, soft_delete: bool = Query(True, description="Soft delete (marcar como eliminado) o hard delete")):
@@ -117,8 +116,8 @@ async def delete_message(message_id: int, soft_delete: bool = Query(True, descri
 
     if soft_delete:
         # Soft delete: marcar como eliminado
-        message.is_deleted = True
-        message.updated_at = datetime.now()
+        message["is_deleted"] = True
+        message["updated_at"] = datetime.now()
     else:
         # Hard delete: eliminar completamente
         del messages_db[message_id]
@@ -133,16 +132,16 @@ async def restore_message(message_id: int):
             detail="Message not found"
         )
 
-    if not message.is_deleted:
+    if not message["is_deleted"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Message is not deleted"
         )
 
-    message.is_deleted = False
-    message.updated_at = datetime.now()
+    message["is_deleted"] = False
+    message["updated_at"] = datetime.now()
 
-    return message.to_dict()
+    return message
 
 @router.get("/room/{room_id}/latest", response_model=List[MessageResponse])
 async def get_latest_messages(
@@ -152,11 +151,11 @@ async def get_latest_messages(
     """Obtener los últimos N mensajes de una sala"""
     messages = [
         msg for msg in messages_db.values()
-        if msg.room_id == room_id and not msg.is_deleted
+        if msg["room_id"] == room_id and not msg["is_deleted"]
     ]
 
     # Ordenar por fecha descendente y limitar
-    messages.sort(key=lambda x: x.created_at, reverse=True)
+    messages.sort(key=lambda x: x["created_at"], reverse=True)
     messages = messages[:limit]
 
-    return [msg.to_dict() for msg in messages]
+    return messages
