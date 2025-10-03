@@ -2,10 +2,14 @@ from fastapi import APIRouter, HTTPException, status, Query, Depends
 from typing import List
 from datetime import datetime
 from sqlalchemy.orm import Session
+import logging
 
 from app.schemas.message import MessageCreate, MessageUpdate, MessageResponse
 from app.models.message import Message
 from app.database import get_db
+from app.services.message_cache import message_cache
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/messages",
@@ -27,6 +31,22 @@ async def create_message(message_data: MessageCreate, db: Session = Depends(get_
     db.add(message)
     db.commit()
     db.refresh(message)
+
+    # Cachear mensaje en Redis
+    try:
+        message_dict = {
+            "id": message.id,
+            "room_id": message.room_id,
+            "user_id": message.user_id,
+            "content": message.content,
+            "created_at": message.created_at.isoformat(),
+            "updated_at": message.updated_at.isoformat() if message.updated_at else None,
+            "is_deleted": message.is_deleted
+        }
+        message_cache.cache_message(message.room_id, message_dict)
+    except Exception as e:
+        logger.warning(f"No se pudo cachear mensaje {message.id}: {e}")
+        # No fallar la request si falla el caché
 
     return message
 
@@ -157,10 +177,43 @@ async def get_latest_messages(
     limit: int = Query(50, ge=1, le=100, description="Número de mensajes recientes"),
     db: Session = Depends(get_db)
 ):
-    """Obtener los últimos N mensajes de una sala"""
+    """
+    Obtener los últimos N mensajes de una sala
+
+    Usa caché Redis para mejor rendimiento. Si no hay caché,
+    consulta la DB y actualiza el caché.
+    """
+    # Intentar obtener del caché
+    try:
+        cached_messages = message_cache.get_cached_messages(room_id, limit)
+        if cached_messages is not None:
+            logger.info(f"✅ Mensajes obtenidos del caché para sala {room_id}")
+            return cached_messages
+    except Exception as e:
+        logger.warning(f"Error leyendo caché: {e}, consultando DB...")
+
+    # Si no hay caché, consultar DB
     messages = db.query(Message).filter(
         Message.room_id == room_id,
         Message.is_deleted == False
     ).order_by(Message.created_at.desc()).limit(limit).all()
+
+    # Actualizar caché con resultados de la DB
+    try:
+        messages_dict = [
+            {
+                "id": msg.id,
+                "room_id": msg.room_id,
+                "user_id": msg.user_id,
+                "content": msg.content,
+                "created_at": msg.created_at.isoformat(),
+                "updated_at": msg.updated_at.isoformat() if msg.updated_at else None,
+                "is_deleted": msg.is_deleted
+            }
+            for msg in messages
+        ]
+        message_cache.update_cache_with_db_messages(room_id, messages_dict)
+    except Exception as e:
+        logger.warning(f"No se pudo actualizar caché: {e}")
 
     return messages
