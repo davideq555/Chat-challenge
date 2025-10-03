@@ -1,26 +1,20 @@
 from datetime import datetime
 from typing import Optional
+from sqlalchemy import String, Boolean, DateTime, Integer, ForeignKey, Text
+from sqlalchemy.orm import Mapped, mapped_column
+from . import Base
 
-class Message:
+class Message(Base):
     """Modelo de Mensaje"""
+    __tablename__ = "messages"
 
-    def __init__(
-        self,
-        id: Optional[int] = None,
-        room_id: int = 0,
-        user_id: int = 0,
-        content: str = "",
-        created_at: Optional[datetime] = None,
-        updated_at: Optional[datetime] = None,
-        is_deleted: bool = False
-    ):
-        self.id = id
-        self.room_id = room_id
-        self.user_id = user_id
-        self.content = content
-        self.created_at = created_at or datetime.now()
-        self.updated_at = updated_at
-        self.is_deleted = is_deleted
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    room_id: Mapped[int] = mapped_column(ForeignKey("chat_rooms.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, nullable=False)
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     def to_dict(self):
         return {

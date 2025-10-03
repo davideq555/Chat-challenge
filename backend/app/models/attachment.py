@@ -1,22 +1,17 @@
 from datetime import datetime
-from typing import Optional
+from sqlalchemy import String, DateTime, ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column
+from . import Base
 
-class Attachment:
+class Attachment(Base):
     """Modelo de Adjunto"""
+    __tablename__ = "attachments"
 
-    def __init__(
-        self,
-        id: Optional[int] = None,
-        message_id: int = 0,
-        file_url: str = "",
-        file_type: str = "",
-        uploaded_at: Optional[datetime] = None
-    ):
-        self.id = id
-        self.message_id = message_id
-        self.file_url = file_url
-        self.file_type = file_type
-        self.uploaded_at = uploaded_at or datetime.now()
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    message_id: Mapped[int] = mapped_column(ForeignKey("messages.id"), nullable=False)
+    file_url: Mapped[str] = mapped_column(String(500), nullable=False)
+    file_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, nullable=False)
 
     def to_dict(self):
         return {

@@ -1,26 +1,20 @@
 from datetime import datetime
 from typing import Optional
+from sqlalchemy import String, Boolean, DateTime
+from sqlalchemy.orm import Mapped, mapped_column
+from . import Base
 
-class User:
+class User(Base):
     """Modelo de Usuario"""
+    __tablename__ = "users"
 
-    def __init__(
-        self,
-        id: Optional[int] = None,
-        username: str = "",
-        email: str = "",
-        password_hash: str = "",
-        created_at: Optional[datetime] = None,
-        last_login: Optional[datetime] = None,
-        is_active: bool = True
-    ):
-        self.id = id
-        self.username = username
-        self.email = email
-        self.password_hash = password_hash
-        self.created_at = created_at or datetime.now()
-        self.last_login = last_login
-        self.is_active = is_active
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    email: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, nullable=False)
+    last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     def to_dict(self):
         return {
