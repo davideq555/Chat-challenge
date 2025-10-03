@@ -2,15 +2,20 @@ from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
-from app.routers import users, chat_rooms, messages, attachments
+from app.routers import users, chat_rooms, messages, attachments, websocket
 from app.database import get_db
 from app.redis_client import redis_client
 from app.services.message_cache import message_cache
 
 load_dotenv()
 
-app = FastAPI(title="Chat API", version="1.0.0")
+app = FastAPI(
+    title="Chat API",
+    version="1.0.0",
+    description="API de chat en tiempo real con WebSockets, PostgreSQL y Redis"
+)
 
 # Configurar CORS
 app.add_middleware(
@@ -26,6 +31,7 @@ app.include_router(users.router)
 app.include_router(chat_rooms.router)
 app.include_router(messages.router)
 app.include_router(attachments.router)
+app.include_router(websocket.router)  # WebSocket router
 
 @app.get("/")
 async def root():
@@ -50,7 +56,7 @@ async def health(db: Session = Depends(get_db)):
 
     # Verificar PostgreSQL
     try:
-        db.execute("SELECT 1")
+        db.execute(text("SELECT 1"))
         health_status["services"]["database"] = "ok"
     except Exception as e:
         health_status["services"]["database"] = f"error: {str(e)}"

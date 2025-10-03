@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Test Client</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            width: 100%;
+            max-width: 800px;
+            height: 600px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ff4444;
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.connected {
+            background: #44ff44;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .config {
+            padding: 15px 20px;
+            background: #f5f5f5;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .config input {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            flex: 1;
+            min-width: 100px;
+        }
+
+        .config button {
+            padding: 8px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.3s;
+        }
+
+        .config button:hover {
+            background: #5568d3;
+        }
+
+        .config button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #fafafa;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message-time {
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 3px;
+        }
+
+        .message-content {
+            padding: 10px 15px;
+            border-radius: 12px;
+            max-width: 70%;
+            word-wrap: break-word;
+        }
+
+        .message.own .message-content {
+            background: #667eea;
+            color: white;
+            margin-left: auto;
+        }
+
+        .message.other .message-content {
+            background: white;
+            border: 1px solid #e0e0e0;
+        }
+
+        .message.system {
+            text-align: center;
+        }
+
+        .message.system .message-content {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            color: #856404;
+            margin: 0 auto;
+            font-size: 13px;
+        }
+
+        .message.error .message-content {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        .message-username {
+            font-weight: 600;
+            margin-bottom: 3px;
+            font-size: 13px;
+        }
+
+        .input-area {
+            padding: 15px 20px;
+            background: white;
+            border-top: 1px solid #ddd;
+            display: flex;
+            gap: 10px;
+        }
+
+        .input-area input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            border-radius: 25px;
+            font-size: 14px;
+        }
+
+        .input-area input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .input-area button {
+            padding: 12px 30px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.3s;
+        }
+
+        .input-area button:hover {
+            background: #5568d3;
+        }
+
+        .input-area button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .typing-indicator {
+            padding: 5px 20px;
+            font-size: 12px;
+            color: #888;
+            font-style: italic;
+            min-height: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌐 WebSocket Test Client</h1>
+            <div class="status">
+                <div class="status-indicator" id="statusIndicator"></div>
+                <span id="statusText">Desconectado</span>
+            </div>
+        </div>
+
+        <div class="config">
+            <input type="number" id="roomId" placeholder="Room ID" value="1">
+            <input type="number" id="userId" placeholder="User ID" value="1">
+            <input type="text" id="username" placeholder="Username" value="TestUser">
+            <button id="connectBtn" onclick="connect()">Conectar</button>
+            <button id="disconnectBtn" onclick="disconnect()" disabled>Desconectar</button>
+        </div>
+
+        <div class="messages" id="messages"></div>
+        <div class="typing-indicator" id="typingIndicator"></div>
+
+        <div class="input-area">
+            <input type="text" id="messageInput" placeholder="Escribe un mensaje..." disabled onkeypress="handleKeyPress(event)">
+            <button id="sendBtn" onclick="sendMessage()" disabled>Enviar</button>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let currentUsername = '';
+        let typingTimeout = null;
+
+        function updateStatus(connected) {
+            const indicator = document.getElementById('statusIndicator');
+            const text = document.getElementById('statusText');
+            const messageInput = document.getElementById('messageInput');
+            const sendBtn = document.getElementById('sendBtn');
+            const connectBtn = document.getElementById('connectBtn');
+            const disconnectBtn = document.getElementById('disconnectBtn');
+
+            if (connected) {
+                indicator.classList.add('connected');
+                text.textContent = 'Conectado';
+                messageInput.disabled = false;
+                sendBtn.disabled = false;
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+            } else {
+                indicator.classList.remove('connected');
+                text.textContent = 'Desconectado';
+                messageInput.disabled = true;
+                sendBtn.disabled = true;
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+            }
+        }
+
+        function addMessage(type, data, username = '') {
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+
+            const time = new Date().toLocaleTimeString();
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'message-time';
+            timeDiv.textContent = time;
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+
+            if (type === 'own' || type === 'other') {
+                const usernameDiv = document.createElement('div');
+                usernameDiv.className = 'message-username';
+                usernameDiv.textContent = username;
+                contentDiv.appendChild(usernameDiv);
+
+                const textDiv = document.createElement('div');
+                textDiv.textContent = data;
+                contentDiv.appendChild(textDiv);
+            } else {
+                contentDiv.textContent = data;
+            }
+
+            messageDiv.appendChild(timeDiv);
+            messageDiv.appendChild(contentDiv);
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function updateTypingIndicator(username, isTyping) {
+            const indicator = document.getElementById('typingIndicator');
+            if (isTyping) {
+                indicator.textContent = `${username} está escribiendo...`;
+            } else {
+                indicator.textContent = '';
+            }
+        }
+
+        function connect() {
+            const roomId = document.getElementById('roomId').value;
+            const userId = document.getElementById('userId').value;
+            const username = document.getElementById('username').value;
+
+            if (!roomId || !userId || !username) {
+                alert('Por favor completa todos los campos');
+                return;
+            }
+
+            currentUsername = username;
+            const url = `ws://localhost:8000/ws/${roomId}?user_id=${userId}&username=${username}`;
+
+            ws = new WebSocket(url);
+
+            ws.onopen = () => {
+                updateStatus(true);
+                addMessage('system', '✅ Conectado al chat');
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                const eventType = data.type;
+                const eventData = data.data || {};
+
+                console.log('Evento recibido:', eventType, eventData);
+
+                switch(eventType) {
+                    case 'connected':
+                        const users = eventData.active_users || [];
+                        addMessage('system', `Sala ${eventData.room_id} - ${users.length} usuarios activos`);
+                        break;
+
+                    case 'message':
+                        const isOwn = eventData.username === currentUsername;
+                        addMessage(isOwn ? 'own' : 'other', eventData.content, eventData.username);
+                        break;
+
+                    case 'message_sent':
+                        console.log('Mensaje enviado:', eventData.message_id);
+                        break;
+
+                    case 'user_joined':
+                        addMessage('system', `👋 ${eventData.username} se unió a la sala`);
+                        break;
+
+                    case 'user_left':
+                        addMessage('system', `👋 ${eventData.username} salió de la sala`);
+                        break;
+
+                    case 'typing':
+                        if (eventData.username !== currentUsername) {
+                            updateTypingIndicator(eventData.username, eventData.is_typing);
+                            if (eventData.is_typing) {
+                                setTimeout(() => updateTypingIndicator('', false), 3000);
+                            }
+                        }
+                        break;
+
+                    case 'error':
+                        addMessage('error', `❌ Error: ${eventData.message}`);
+                        break;
+
+                    default:
+                        console.log('Evento desconocido:', eventType, eventData);
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                addMessage('error', '❌ Error de conexión');
+            };
+
+            ws.onclose = () => {
+                updateStatus(false);
+                addMessage('system', '🔌 Desconectado del chat');
+                ws = null;
+            };
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+
+            if (!message || !ws || ws.readyState !== WebSocket.OPEN) {
+                return;
+            }
+
+            ws.send(JSON.stringify({
+                type: 'message',
+                content: message
+            }));
+
+            input.value = '';
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            } else {
+                // Enviar typing indicator
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'typing',
+                        is_typing: true
+                    }));
+
+                    // Cancelar timeout anterior
+                    if (typingTimeout) {
+                        clearTimeout(typingTimeout);
+                    }
+
+                    // Después de 1 segundo sin escribir, enviar stop typing
+                    typingTimeout = setTimeout(() => {
+                        if (ws && ws.readyState === WebSocket.OPEN) {
+                            ws.send(JSON.stringify({
+                                type: 'typing',
+                                is_typing: false
+                            }));
+                        }
+                    }, 1000);
+                }
+            }
+        }
+
+        // Desconectar al cerrar la página
+        window.onbeforeunload = () => {
+            if (ws) {
+                ws.close();
+            }
+        };
+    </script>
+</body>
+</html>
