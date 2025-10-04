@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.schemas.user import UserCreate, UserUpdate, UserLogin, UserResponse
 from app.models.user import User
 from app.database import get_db
+from app.services.user_online import user_online_service
 
 router = APIRouter(
     prefix="/users",
@@ -155,3 +156,44 @@ async def login(credentials: UserLogin, db: Session = Depends(get_db)):
     db.refresh(user)
 
     return user
+
+@router.get("/online", response_model=List[int])
+async def get_online_users():
+    """
+    Obtener lista de IDs de usuarios online
+
+    Returns:
+        Lista de IDs de usuarios que están conectados actualmente
+    """
+    online_users = user_online_service.get_online_users()
+    # Convertir set de strings a lista de ints
+    return [int(user_id) for user_id in online_users]
+
+@router.get("/{user_id}/online")
+async def check_user_online(user_id: int, db: Session = Depends(get_db)):
+    """
+    Verificar si un usuario específico está online
+
+    Args:
+        user_id: ID del usuario a verificar
+
+    Returns:
+        Diccionario con is_online y connections_count
+    """
+    # Verificar que el usuario exista
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    is_online = user_online_service.is_user_online(user_id)
+    connections_count = user_online_service.get_user_connections_count(user_id)
+
+    return {
+        "user_id": user_id,
+        "username": user.username,
+        "is_online": is_online,
+        "connections_count": connections_count
+    }

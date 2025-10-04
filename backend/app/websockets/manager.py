@@ -5,6 +5,7 @@ import logging
 from datetime import datetime
 
 from app.websockets.events import EventType, create_event
+from app.services.user_online import user_online_service
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,9 @@ class ConnectionManager:
             "username": username
         }
 
+        # Registrar conexión en Redis (manejo de estado online)
+        user_online_service.add_user_connection(user_id, connection_id)
+
         logger.info(
             f"✅ Usuario {username} (ID: {user_id}) conectado a sala {room_id}. "
             f"Conexiones activas en sala: {len(self.active_connections[room_id])}"
@@ -121,6 +125,9 @@ class ConnectionManager:
 
         # Eliminar conexión
         del self.active_connections[room_id][connection_id]
+
+        # Eliminar conexión de Redis (actualiza estado online si es necesario)
+        user_online_service.remove_user_connection(user_id, connection_id)
 
         # Si la sala quedó vacía, eliminarla
         if not self.active_connections[room_id]:
@@ -264,6 +271,7 @@ class ConnectionManager:
         return {
             "total_connections": self.get_total_connections(),
             "total_rooms": len(self.active_connections),
+            "users_online": user_online_service.get_online_count(),
             "rooms": {
                 room_id: {
                     "connections": len(connections),

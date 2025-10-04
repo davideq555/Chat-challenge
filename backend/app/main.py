@@ -8,6 +8,7 @@ from app.routers import users, chat_rooms, messages, attachments, websocket
 from app.database import get_db
 from app.redis_client import redis_client
 from app.services.message_cache import message_cache
+from app.services.init_data import init_default_data
 
 load_dotenv()
 
@@ -32,6 +33,12 @@ app.include_router(chat_rooms.router)
 app.include_router(messages.router)
 app.include_router(attachments.router)
 app.include_router(websocket.router)  # WebSocket router
+
+# Evento de inicio: crear datos por defecto
+@app.on_event("startup")
+async def startup_event():
+    """Inicializar datos por defecto al iniciar la aplicación"""
+    init_default_data()
 
 @app.get("/")
 async def root():
