@@ -16,13 +16,18 @@ type ConversationItemProps = {
 export function ConversationItem({ conversation, isSelected, onClick, currentUserId }: ConversationItemProps) {
   const { user, lastMessage, unreadCount } = conversation
 
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2)
+  const getInitials = (username: string) => {
+    // Si el username tiene espacios, tomar iniciales de cada palabra
+    // Si no, tomar las primeras 2 letras
+    if (username.includes(" ")) {
+      return username
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
+    }
+    return username.slice(0, 2).toUpperCase()
   }
 
   const formatTime = (timestamp: string) => {
@@ -54,7 +59,7 @@ export function ConversationItem({ conversation, isSelected, onClick, currentUse
     >
       <div className="relative">
         <Avatar>
-          <AvatarFallback className="bg-primary/10 text-primary">{getInitials(user.name)}</AvatarFallback>
+          <AvatarFallback className="bg-primary/10 text-primary">{getInitials(user.username)}</AvatarFallback>
         </Avatar>
         {user.isOnline && (
           <div className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-[var(--online-indicator)] border-2 border-card" />
@@ -63,7 +68,7 @@ export function ConversationItem({ conversation, isSelected, onClick, currentUse
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2 mb-1">
-          <span className="font-semibold text-card-foreground truncate">{user.name}</span>
+          <span className="font-semibold text-card-foreground truncate">{user.username}</span>
           {lastMessage && (
             <span className="text-xs text-muted-foreground flex-shrink-0">{formatTime(lastMessage.timestamp)}</span>
           )}

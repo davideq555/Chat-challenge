@@ -1,5 +1,7 @@
 "use client"
 
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000'
+
 type WebSocketMessage = {
   type: "message" | "typing" | "online" | "offline" | "join_room" | "leave_room"
   data: any
@@ -13,63 +15,66 @@ class WebSocketService {
   private reconnectAttempts = 0
   private maxReconnectAttempts = 5
   private reconnectDelay = 3000
-  private url = ""
-  private token = ""
+  private roomId: string = ""
+  private token: string = ""
 
-  connect(url: string, token: string) {
-    this.url = url
+  connect(roomId: string, token: string = "temp-token") {
+    this.roomId = roomId
     this.token = token
 
     try {
-      // Conectar al WebSocket del backend
-      this.ws = new WebSocket(`${url}?token=${token}`)
+      // Connect to WebSocket backend using room_id in path
+      const wsUrl = `${WS_URL}/ws/${roomId}?token=${token}`
+      console.log("Connecting to WebSocket:", wsUrl)
+
+      this.ws = new WebSocket(wsUrl)
 
       this.ws.onopen = () => {
-        console.log("[v0] WebSocket connected")
+        console.log("WebSocket connected to room:", roomId)
         this.reconnectAttempts = 0
       }
 
       this.ws.onmessage = (event) => {
         try {
           const message: WebSocketMessage = JSON.parse(event.data)
-          console.log("[v0] WebSocket message received:", message)
+          console.log("WebSocket message received:", message)
           this.callbacks.forEach((callback) => callback(message))
         } catch (error) {
-          console.error("[v0] Error parsing WebSocket message:", error)
+          console.error("Error parsing WebSocket message:", error)
         }
       }
 
       this.ws.onerror = (error) => {
-        console.error("[v0] WebSocket error:", error)
+        console.error("WebSocket error:", error)
       }
 
       this.ws.onclose = () => {
-        console.log("[v0] WebSocket disconnected")
+        console.log("WebSocket disconnected")
         this.handleReconnect()
       }
     } catch (error) {
-      console.error("[v0] Error connecting to WebSocket:", error)
+      console.error("Error connecting to WebSocket:", error)
     }
   }
 
   private handleReconnect() {
     if (this.reconnectAttempts < this.maxReconnectAttempts) {
       this.reconnectAttempts++
-      console.log(`[v0] Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`)
+      console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`)
       setTimeout(() => {
-        this.connect(this.url, this.token)
+        this.connect(this.roomId, this.token)
       }, this.reconnectDelay)
     } else {
-      console.error("[v0] Max reconnection attempts reached")
+      console.error("Max reconnection attempts reached")
     }
   }
 
   send(message: WebSocketMessage) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message))
-      console.log("[v0] WebSocket message sent:", message)
+      console.log("WebSocket message sent:", message)
     } else {
-      console.error("[v0] WebSocket is not connected")
+      console.error("WebSocket is not connected")
     }
   }
 

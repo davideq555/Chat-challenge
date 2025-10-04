@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Eye, EyeOff, Loader2 } from "lucide-react"
+import { apiClient } from "@/lib/api"
 
 export function ChangePasswordForm() {
   const router = useRouter()
@@ -16,6 +17,8 @@ export function ChangePasswordForm() {
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
+  const [success, setSuccess] = useState(false)
   const [formData, setFormData] = useState({
     email: "",
     currentPassword: "",
@@ -25,41 +28,39 @@ export function ChangePasswordForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError("")
+    setSuccess(false)
 
     if (formData.newPassword !== formData.confirmPassword) {
-      alert("Las contraseñas nuevas no coinciden")
+      setError("Las contraseñas nuevas no coinciden")
       return
     }
 
-    if (formData.newPassword.length < 6) {
-      alert("La contraseña debe tener al menos 6 caracteres")
+    if (formData.newPassword.length < 8) {
+      setError("La contraseña debe tener al menos 8 caracteres")
       return
     }
 
     setLoading(true)
 
     try {
-      // TODO: Integrar con tu API de backend
-      const response = await fetch("/api/auth/change-password", {
-        method: "POST",
+      // Primero verificar credenciales actuales
+      const loginData = await apiClient.login(formData.email, formData.currentPassword)
+
+      // Si el login es exitoso, actualizar la contraseña
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/users/${loginData.user.id}`, {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: formData.email,
-          currentPassword: formData.currentPassword,
-          newPassword: formData.newPassword,
-        }),
+        body: JSON.stringify({ password: formData.newPassword }),
       })
 
-      if (response.ok) {
-        alert("Contraseña cambiada exitosamente")
+      setSuccess(true)
+      setTimeout(() => {
         router.push("/login")
-      } else {
-        const error = await response.json()
-        alert(error.message || "Error al cambiar la contraseña")
-      }
+      }, 2000)
     } catch (error) {
       console.error("Error:", error)
-      alert("Error de conexión. Intenta nuevamente.")
+      setError(error instanceof Error ? error.message : "Error al cambiar la contraseña")
     } finally {
       setLoading(false)
     }
@@ -73,6 +74,18 @@ export function ChangePasswordForm() {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-md">
+              {error}
+            </div>
+          )}
+
+          {success && (
+            <div className="p-3 text-sm text-green-600 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md">
+              Contraseña actualizada exitosamente. Redirigiendo...
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="email">Correo Electrónico</Label>
             <Input
@@ -82,6 +95,7 @@ export function ChangePasswordForm() {
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               required
+              disabled={loading || success}
             />
           </div>
 
@@ -95,6 +109,7 @@ export function ChangePasswordForm() {
                 value={formData.currentPassword}
                 onChange={(e) => setFormData({ ...formData, currentPassword: e.target.value })}
                 required
+                disabled={loading || success}
               />
               <button
                 type="button"
@@ -116,7 +131,8 @@ export function ChangePasswordForm() {
                 value={formData.newPassword}
                 onChange={(e) => setFormData({ ...formData, newPassword: e.target.value })}
                 required
-                minLength={6}
+                minLength={8}
+                disabled={loading || success}
               />
               <button
                 type="button"
@@ -138,7 +154,8 @@ export function ChangePasswordForm() {
                 value={formData.confirmPassword}
                 onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
                 required
-                minLength={6}
+                minLength={8}
+                disabled={loading || success}
               />
               <button
                 type="button"
@@ -150,7 +167,7 @@ export function ChangePasswordForm() {
             </div>
           </div>
 
-          <Button type="submit" className="w-full" disabled={loading}>
+          <Button type="submit" className="w-full" disabled={loading || success}>
             {loading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

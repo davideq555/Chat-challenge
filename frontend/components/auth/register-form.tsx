@@ -9,14 +9,16 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Eye, EyeOff, Loader2 } from "lucide-react"
+import { apiClient } from "@/lib/api"
 
 export function RegisterForm() {
   const router = useRouter()
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
   const [formData, setFormData] = useState({
-    name: "",
+    username: "",
     email: "",
     password: "",
     confirmPassword: "",
@@ -24,36 +26,21 @@ export function RegisterForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError("")
 
     if (formData.password !== formData.confirmPassword) {
-      alert("Las contraseñas no coinciden")
+      setError("Las contraseñas no coinciden")
       return
     }
 
     setLoading(true)
 
     try {
-      // TODO: Integrar con tu API de backend
-      const response = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: formData.name,
-          email: formData.email,
-          password: formData.password,
-        }),
-      })
-
-      if (response.ok) {
-        alert("Cuenta creada exitosamente. Ahora puedes iniciar sesión.")
-        router.push("/login")
-      } else {
-        const error = await response.json()
-        alert(error.message || "Error al crear la cuenta")
-      }
+      await apiClient.register(formData.username, formData.email, formData.password)
+      router.push("/login")
     } catch (error) {
       console.error("Error:", error)
-      alert("Error de conexión. Intenta nuevamente.")
+      setError(error instanceof Error ? error.message : "Error al crear la cuenta")
     } finally {
       setLoading(false)
     }
@@ -67,15 +54,23 @@ export function RegisterForm() {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-md">
+              {error}
+            </div>
+          )}
+
           <div className="space-y-2">
-            <Label htmlFor="name">Nombre Completo</Label>
+            <Label htmlFor="username">Nombre de Usuario</Label>
             <Input
-              id="name"
+              id="username"
               type="text"
-              placeholder="Juan Pérez"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              placeholder="juanperez"
+              value={formData.username}
+              onChange={(e) => setFormData({ ...formData, username: e.target.value })}
               required
+              minLength={3}
+              disabled={loading}
             />
           </div>
 
@@ -88,6 +83,7 @@ export function RegisterForm() {
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               required
+              disabled={loading}
             />
           </div>
 
@@ -102,6 +98,7 @@ export function RegisterForm() {
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 required
                 minLength={6}
+                disabled={loading}
               />
               <button
                 type="button"
@@ -124,6 +121,7 @@ export function RegisterForm() {
                 onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
                 required
                 minLength={6}
+                disabled={loading}
               />
               <button
                 type="button"

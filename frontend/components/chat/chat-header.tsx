@@ -27,13 +27,18 @@ export function ChatHeader({ currentUser }: ChatHeaderProps) {
     router.push("/login")
   }
 
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2)
+  const getInitials = (username: string) => {
+    // Si el username tiene espacios, tomar iniciales de cada palabra
+    // Si no, tomar las primeras 2 letras
+    if (username.includes(" ")) {
+      return username
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
+    }
+    return username.slice(0, 2).toUpperCase()
   }
 
   return (
@@ -51,7 +56,7 @@ export function ChatHeader({ currentUser }: ChatHeaderProps) {
             <Button variant="ghost" className="relative h-10 w-10 rounded-full">
               <Avatar>
                 <AvatarFallback className="bg-primary text-primary-foreground">
-                  {getInitials(currentUser.name)}
+                  {getInitials(currentUser.username)}
                 </AvatarFallback>
               </Avatar>
             </Button>
@@ -60,11 +65,11 @@ export function ChatHeader({ currentUser }: ChatHeaderProps) {
             <div className="flex items-center gap-2 p-2">
               <Avatar>
                 <AvatarFallback className="bg-primary text-primary-foreground">
-                  {getInitials(currentUser.name)}
+                  {getInitials(currentUser.username)}
                 </AvatarFallback>
               </Avatar>
               <div className="flex flex-col">
-                <span className="text-sm font-medium">{currentUser.name}</span>
+                <span className="text-sm font-medium">{currentUser.username}</span>
                 <span className="text-xs text-muted-foreground">{currentUser.email}</span>
               </div>
             </div>

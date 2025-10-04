@@ -13,6 +13,7 @@ import { FileUploadDialog } from "./file-upload-dialog"
 import type { Conversation, User, Message } from "./chat-layout"
 import { websocketService } from "@/lib/websocket"
 import { useWebSocket } from "@/hooks/use-websocket"
+import { apiClient } from "@/lib/api"
 
 type ChatWindowProps = {
   selectedConversation: Conversation | null
@@ -49,61 +50,51 @@ export function ChatWindow({ selectedConversation, currentUser }: ChatWindowProp
     if (selectedConversation) {
       loadMessages(selectedConversation.user.id)
 
-      const roomId = [currentUser.id, selectedConversation.user.id].sort().join("-")
-      websocketService.joinRoom(roomId)
+      // Get token from localStorage
+      const token = localStorage.getItem("token") || "temp-token"
+
+      // Use the conversation ID as room ID
+      const roomId = selectedConversation.id
+
+      // Connect to WebSocket for this room
+      websocketService.connect(roomId, token)
 
       return () => {
-        websocketService.leaveRoom(roomId)
+        websocketService.disconnect()
       }
     }
   }, [selectedConversation, currentUser.id])
 
   const loadMessages = async (userId: string) => {
     try {
-      // TODO: Cargar mensajes desde el backend
-      const response = await fetch(`/api/messages?userId=${userId}`)
-      if (response.ok) {
-        const data = await response.json()
-        setMessages(data.messages)
-      } else {
-        // Datos de ejemplo si falla la API
-        setMessages([
-          {
-            id: "1",
-            content: "Hola, ¿cómo estás?",
-            senderId: userId,
-            receiverId: currentUser.id,
-            timestamp: new Date(Date.now() - 3600000).toISOString(),
-            type: "text",
-          },
-          {
-            id: "2",
-            content: "¡Hola! Todo bien, gracias. ¿Y tú?",
-            senderId: currentUser.id,
-            receiverId: userId,
-            timestamp: new Date(Date.now() - 3500000).toISOString(),
-            type: "text",
-          },
-          {
-            id: "3",
-            content: "Muy bien también. ¿Tienes tiempo para una reunión hoy?",
-            senderId: userId,
-            receiverId: currentUser.id,
-            timestamp: new Date(Date.now() - 3400000).toISOString(),
-            type: "text",
-          },
-          {
-            id: "4",
-            content: "Claro, ¿a qué hora te viene bien?",
-            senderId: currentUser.id,
-            receiverId: userId,
-            timestamp: new Date(Date.now() - 3300000).toISOString(),
-            type: "text",
-          },
-        ])
-      }
+      // Get current user from localStorage
+      const userStr = localStorage.getItem("user")
+      if (!userStr) return
+
+      const currentUserData = JSON.parse(userStr)
+
+      // For now, we assume the room ID is the conversation ID
+      // In a real app, you'd get the room ID from the conversation object
+      const roomId = parseInt(selectedConversation?.id || "1")
+
+      // Load latest messages from backend
+      const messages = await apiClient.getLatestMessages(roomId, currentUserData.id, 50)
+
+      // Transform backend messages to frontend format
+      const transformedMessages = messages.map((msg: any) => ({
+        id: msg.id.toString(),
+        content: msg.content,
+        senderId: msg.user_id.toString(),
+        receiverId: userId,
+        timestamp: msg.created_at,
+        type: "text",
+        isDeleted: msg.is_deleted,
+      }))
+
+      setMessages(transformedMessages)
     } catch (error) {
-      console.error("[v0] Error loading messages:", error)
+      console.error("Error loading messages:", error)
+      setMessages([])
     }
   }
 
@@ -117,31 +108,38 @@ export function ChatWindow({ selectedConversation, currentUser }: ChatWindowProp
   const handleSendMessage = async () => {
     if (!messageInput.trim() || !selectedConversation) return
 
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      content: messageInput,
-      senderId: currentUser.id,
-      receiverId: selectedConversation.user.id,
-      timestamp: new Date().toISOString(),
-      type: "text",
-    }
-
-    setMessages([...messages, newMessage])
+    const content = messageInput
     setMessageInput("")
 
-    websocketService.sendMessage(newMessage)
-
     try {
-      await fetch("/api/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify(newMessage),
-      })
+      // Get current user from localStorage
+      const userStr = localStorage.getItem("user")
+      if (!userStr) return
+
+      const currentUserData = JSON.parse(userStr)
+      const roomId = parseInt(selectedConversation.id || "1")
+
+      // Send message to backend
+      const savedMessage = await apiClient.sendMessage(roomId, currentUserData.id, content)
+
+      // Create message for local display
+      const newMessage: Message = {
+        id: savedMessage.id.toString(),
+        content: savedMessage.content,
+        senderId: currentUserData.id.toString(),
+        receiverId: selectedConversation.user.id,
+        timestamp: savedMessage.created_at,
+        type: "text",
+      }
+
+      setMessages([...messages, newMessage])
+
+      // Send via WebSocket for real-time delivery
+      websocketService.sendMessage(newMessage)
     } catch (error) {
-      console.error("[v0] Error sending message:", error)
+      console.error("Error sending message:", error)
+      // Restore message input on error
+      setMessageInput(content)
     }
   }
 
@@ -235,13 +233,18 @@ export function ChatWindow({ selectedConversation, currentUser }: ChatWindowProp
     setFileDialogOpen(true)
   }
 
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2)
+  const getInitials = (username: string) => {
+    // Si el username tiene espacios, tomar iniciales de cada palabra
+    // Si no, tomar las primeras 2 letras
+    if (username.includes(" ")) {
+      return username
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
+    }
+    return username.slice(0, 2).toUpperCase()
   }
 
   if (!selectedConversation) {
@@ -267,14 +270,14 @@ export function ChatWindow({ selectedConversation, currentUser }: ChatWindowProp
         <div className="flex items-center gap-3">
           <div className="relative">
             <Avatar>
-              <AvatarFallback className="bg-primary/10 text-primary">{getInitials(user.name)}</AvatarFallback>
+              <AvatarFallback className="bg-primary/10 text-primary">{getInitials(user.username)}</AvatarFallback>
             </Avatar>
             {user.isOnline && (
               <div className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-[var(--online-indicator)] border-2 border-card" />
             )}
           </div>
           <div>
-            <h3 className="font-semibold text-card-foreground">{user.name}</h3>
+            <h3 className="font-semibold text-card-foreground">{user.username}</h3>
             <p className="text-xs text-muted-foreground">
               {isTyping ? "Escribiendo..." : user.isOnline ? "En línea" : user.lastSeen || "Desconectado"}
             </p>

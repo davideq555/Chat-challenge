@@ -7,10 +7,11 @@ import { ChatHeader } from "./chat-header"
 import { useRouter } from "next/navigation"
 import { websocketService } from "@/lib/websocket"
 import { useWebSocket } from "@/hooks/use-websocket"
+import { apiClient } from "@/lib/api"
 
 export type User = {
   id: string
-  name: string
+  username: string
   email: string
   avatar?: string
   isOnline?: boolean
@@ -103,81 +104,57 @@ export function ChatLayout() {
   }
 
   useEffect(() => {
-    // Verificar autenticación
-    const token = localStorage.getItem("token")
-    const userStr = localStorage.getItem("user")
+    const loadConversations = async () => {
+      // Verificar autenticación
+      const token = localStorage.getItem("token")
+      const userStr = localStorage.getItem("user")
 
-    if (!token || !userStr) {
-      router.push("/login")
-      return
+      if (!token || !userStr) {
+        router.push("/login")
+        return
+      }
+
+      const user = JSON.parse(userStr)
+      setCurrentUser(user)
+
+      try {
+        // Cargar conversaciones reales desde el backend
+        const backendConversations = await apiClient.loadUserConversations(user.id)
+
+        // Transformar al formato del frontend
+        const transformedConversations: Conversation[] = backendConversations
+          .filter((conv: any) => conv.otherParticipant) // Solo mostrar salas con otro participante
+          .map((conv: any) => {
+            const lastMsg = conv.lastMessage
+
+            return {
+              id: conv.room.id.toString(),
+              user: {
+                id: conv.otherParticipant.user.id.toString(),
+                username: conv.otherParticipant.user.username,
+                email: conv.otherParticipant.user.email,
+                isOnline: false, // TODO: Implementar estado online con WebSocket
+              },
+              lastMessage: lastMsg ? {
+                id: lastMsg.id.toString(),
+                content: lastMsg.content,
+                senderId: lastMsg.user_id.toString(),
+                receiverId: conv.otherParticipant.user.id.toString(),
+                timestamp: lastMsg.created_at,
+                type: "text",
+              } : undefined,
+              unreadCount: 0, // TODO: Implementar contador de no leídos
+            }
+          })
+
+        setConversations(transformedConversations)
+      } catch (error) {
+        console.error("Error loading conversations:", error)
+        setConversations([])
+      }
     }
 
-    const user = JSON.parse(userStr)
-    setCurrentUser(user)
-
-    // TODO: Reemplazar con la URL de tu backend WebSocket
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8080/ws"
-    websocketService.connect(wsUrl, token)
-
-    // TODO: Cargar conversaciones desde el backend
-    // Datos de ejemplo
-    setConversations([
-      {
-        id: "1",
-        user: {
-          id: "2",
-          name: "María García",
-          email: "maria@example.com",
-          isOnline: true,
-        },
-        lastMessage: {
-          id: "1",
-          content: "Hola, ¿cómo estás?",
-          senderId: "2",
-          receiverId: user.id,
-          timestamp: new Date().toISOString(),
-          type: "text",
-        },
-        unreadCount: 2,
-      },
-      {
-        id: "2",
-        user: {
-          id: "3",
-          name: "Carlos Rodríguez",
-          email: "carlos@example.com",
-          isOnline: false,
-          lastSeen: "Hace 2 horas",
-        },
-        lastMessage: {
-          id: "2",
-          content: "Perfecto, nos vemos mañana",
-          senderId: user.id,
-          receiverId: "3",
-          timestamp: new Date(Date.now() - 3600000).toISOString(),
-          type: "text",
-        },
-        unreadCount: 0,
-      },
-      {
-        id: "3",
-        user: {
-          id: "4",
-          name: "Ana Martínez",
-          email: "ana@example.com",
-          isOnline: true,
-        },
-        lastMessage: {
-          id: "3",
-          content: "Gracias por la información",
-          senderId: "4",
-          receiverId: user.id,
-          timestamp: new Date(Date.now() - 7200000).toISOString(),
-          type: "text",
-        },
-        unreadCount: 0,
-      },
-    ])
+    loadConversations()
 
     return () => {
       websocketService.disconnect()

@@ -10,11 +10,13 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Eye, EyeOff, Loader2 } from "lucide-react"
 import Link from "next/link"
+import { apiClient } from "@/lib/api"
 
 export function LoginForm() {
   const router = useRouter()
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -23,27 +25,18 @@ export function LoginForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+    setError("")
 
     try {
-      // TODO: Integrar con tu API de backend
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
-      })
+      const data = await apiClient.login(formData.email, formData.password)
 
-      if (response.ok) {
-        const data = await response.json()
-        // Guardar token en localStorage
-        localStorage.setItem("token", data.token)
-        localStorage.setItem("user", JSON.stringify(data.user))
-        router.push("/chat")
-      } else {
-        alert("Error al iniciar sesión. Verifica tus credenciales.")
-      }
+      // Guardar token en localStorage
+      localStorage.setItem("token", data.token)
+      localStorage.setItem("user", JSON.stringify(data.user))
+      router.push("/chat")
     } catch (error) {
       console.error("Error:", error)
-      alert("Error de conexión. Intenta nuevamente.")
+      setError(error instanceof Error ? error.message : "Error al iniciar sesión")
     } finally {
       setLoading(false)
     }
@@ -57,6 +50,12 @@ export function LoginForm() {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-md">
+              {error}
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="email">Correo Electrónico</Label>
             <Input
@@ -66,6 +65,7 @@ export function LoginForm() {
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               required
+              disabled={loading}
             />
           </div>
 
@@ -84,6 +84,7 @@ export function LoginForm() {
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 required
+                disabled={loading}
               />
               <button
                 type="button"
