@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models.user import User
 from app.models.chat_room import ChatRoom
+from app.models.room_participant import RoomParticipant
 from app.database import SessionLocal
 
 logger = logging.getLogger(__name__)
@@ -74,6 +75,39 @@ def init_default_data():
             logger.info(f"✅ Sala de bienvenida creada: {welcome_room.name} (ID: {welcome_room.id})")
         else:
             logger.info(f"ℹ️  Sala de bienvenida ya existe: {welcome_room.name} (ID: {welcome_room.id})")
+
+        # 4. Agregar usuarios como participantes de la sala de bienvenida
+        # Agregar bot
+        bot_participant = db.query(RoomParticipant).filter(
+            RoomParticipant.room_id == welcome_room.id,
+            RoomParticipant.user_id == bot_user.id
+        ).first()
+        if not bot_participant:
+            bot_participant = RoomParticipant(
+                room_id=welcome_room.id,
+                user_id=bot_user.id
+            )
+            db.add(bot_participant)
+            logger.info("✅ Bot agregado como participante de la sala de bienvenida")
+        else:
+            logger.info("ℹ️  Bot ya es participante de la sala de bienvenida")
+
+        # Agregar test user
+        test_participant = db.query(RoomParticipant).filter(
+            RoomParticipant.room_id == welcome_room.id,
+            RoomParticipant.user_id == test_user.id
+        ).first()
+        if not test_participant:
+            test_participant = RoomParticipant(
+                room_id=welcome_room.id,
+                user_id=test_user.id
+            )
+            db.add(test_participant)
+            logger.info("✅ TestUser agregado como participante de la sala de bienvenida")
+        else:
+            logger.info("ℹ️  TestUser ya es participante de la sala de bienvenida")
+
+        db.commit()
 
         logger.info("✅ Datos por defecto inicializados correctamente")
         logger.info(f"   Bot ID: {bot_user.id}, User ID: {test_user.id}, Room ID: {welcome_room.id}")

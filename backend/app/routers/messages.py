@@ -6,6 +6,8 @@ import logging
 
 from app.schemas.message import MessageCreate, MessageUpdate, MessageResponse
 from app.models.message import Message
+from app.models.room_participant import RoomParticipant
+from app.models.chat_room import ChatRoom
 from app.database import get_db
 from app.services.message_cache import message_cache
 
@@ -18,8 +20,30 @@ router = APIRouter(
 
 @router.post("/", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
 async def create_message(message_data: MessageCreate, db: Session = Depends(get_db)):
-    """Crear un nuevo mensaje"""
-    # TODO: Validar que room_id y user_id existan
+    """
+    Crear un nuevo mensaje (VALIDACIÓN DE ACCESO)
+
+    El usuario debe ser participante de la sala para enviar mensajes
+    """
+    # Validar que la sala existe
+    room = db.query(ChatRoom).filter(ChatRoom.id == message_data.room_id).first()
+    if not room:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Chat room not found"
+        )
+
+    # Validar que el usuario es participante de la sala
+    is_participant = db.query(RoomParticipant).filter(
+        RoomParticipant.room_id == message_data.room_id,
+        RoomParticipant.user_id == message_data.user_id
+    ).first()
+
+    if not is_participant:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a participant of this chat room"
+        )
 
     message = Message(
         room_id=message_data.room_id,
@@ -54,16 +78,31 @@ async def create_message(message_data: MessageCreate, db: Session = Depends(get_
 async def get_messages(
     room_id: int = Query(None, description="Filtrar por sala de chat"),
     user_id: int = Query(None, description="Filtrar por usuario"),
+    requesting_user_id: int = Query(..., description="ID del usuario que solicita (REQUERIDO para validación)"),
     include_deleted: bool = Query(False, description="Incluir mensajes eliminados"),
     db: Session = Depends(get_db)
 ):
     """
-    Obtener mensajes con filtros opcionales
+    Obtener mensajes con filtros opcionales (VALIDACIÓN DE ACCESO)
 
     - **room_id**: Filtrar por sala específica
     - **user_id**: Filtrar por autor
+    - **requesting_user_id**: Usuario que solicita (para validar acceso)
     - **include_deleted**: Incluir mensajes marcados como eliminados
     """
+    # Si se filtra por room_id, validar que el usuario es participante
+    if room_id is not None:
+        is_participant = db.query(RoomParticipant).filter(
+            RoomParticipant.room_id == room_id,
+            RoomParticipant.user_id == requesting_user_id
+        ).first()
+
+        if not is_participant:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not a participant of this chat room"
+            )
+
     query = db.query(Message)
 
     # Aplicar filtros
@@ -82,24 +121,55 @@ async def get_messages(
     return query.all()
 
 @router.get("/{message_id}", response_model=MessageResponse)
-async def get_message(message_id: int, db: Session = Depends(get_db)):
-    """Obtener un mensaje por ID"""
+async def get_message(message_id: int, requesting_user_id: int, db: Session = Depends(get_db)):
+    """
+    Obtener un mensaje por ID (VALIDACIÓN DE ACCESO)
+
+    - **message_id**: ID del mensaje
+    - **requesting_user_id**: ID del usuario que solicita (query parameter)
+    """
     message = db.query(Message).filter(Message.id == message_id).first()
     if not message:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Message not found"
         )
+
+    # Validar que el usuario es participante de la sala del mensaje
+    is_participant = db.query(RoomParticipant).filter(
+        RoomParticipant.room_id == message.room_id,
+        RoomParticipant.user_id == requesting_user_id
+    ).first()
+
+    if not is_participant:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a participant of this chat room"
+        )
+
     return message
 
 @router.put("/{message_id}", response_model=MessageResponse)
-async def update_message(message_id: int, message_data: MessageUpdate, db: Session = Depends(get_db)):
-    """Actualizar el contenido de un mensaje"""
+async def update_message(message_id: int, message_data: MessageUpdate, requesting_user_id: int, db: Session = Depends(get_db)):
+    """
+    Actualizar el contenido de un mensaje (VALIDACIÓN DE ACCESO)
+
+    - **message_id**: ID del mensaje
+    - **message_data**: Nuevo contenido
+    - **requesting_user_id**: ID del usuario que solicita (query parameter)
+    """
     message = db.query(Message).filter(Message.id == message_id).first()
     if not message:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Message not found"
+        )
+
+    # Validar que el usuario es el autor del mensaje
+    if message.user_id != requesting_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only edit your own messages"
         )
 
     # No permitir editar mensajes eliminados
@@ -121,12 +191,15 @@ async def update_message(message_id: int, message_data: MessageUpdate, db: Sessi
 @router.delete("/{message_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_message(
     message_id: int,
+    requesting_user_id: int,
     soft_delete: bool = Query(True, description="Soft delete (marcar como eliminado) o hard delete"),
     db: Session = Depends(get_db)
 ):
     """
-    Eliminar un mensaje
+    Eliminar un mensaje (VALIDACIÓN DE ACCESO)
 
+    - **message_id**: ID del mensaje
+    - **requesting_user_id**: ID del usuario que solicita (query parameter)
     - **soft_delete=True**: Marca el mensaje como eliminado (por defecto)
     - **soft_delete=False**: Elimina permanentemente el mensaje
     """
@@ -135,6 +208,13 @@ async def delete_message(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Message not found"
+        )
+
+    # Validar que el usuario es el autor del mensaje
+    if message.user_id != requesting_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only delete your own messages"
         )
 
     if soft_delete:
@@ -148,13 +228,25 @@ async def delete_message(
         db.commit()
 
 @router.post("/{message_id}/restore", response_model=MessageResponse)
-async def restore_message(message_id: int, db: Session = Depends(get_db)):
-    """Restaurar un mensaje eliminado (soft delete)"""
+async def restore_message(message_id: int, requesting_user_id: int, db: Session = Depends(get_db)):
+    """
+    Restaurar un mensaje eliminado (VALIDACIÓN DE ACCESO)
+
+    - **message_id**: ID del mensaje
+    - **requesting_user_id**: ID del usuario que solicita (query parameter)
+    """
     message = db.query(Message).filter(Message.id == message_id).first()
     if not message:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Message not found"
+        )
+
+    # Validar que el usuario es el autor del mensaje
+    if message.user_id != requesting_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only restore your own messages"
         )
 
     if not message.is_deleted:
@@ -174,15 +266,32 @@ async def restore_message(message_id: int, db: Session = Depends(get_db)):
 @router.get("/room/{room_id}/latest", response_model=List[MessageResponse])
 async def get_latest_messages(
     room_id: int,
+    requesting_user_id: int,
     limit: int = Query(50, ge=1, le=100, description="Número de mensajes recientes"),
     db: Session = Depends(get_db)
 ):
     """
-    Obtener los últimos N mensajes de una sala
+    Obtener los últimos N mensajes de una sala (VALIDACIÓN DE ACCESO)
+
+    - **room_id**: ID de la sala
+    - **requesting_user_id**: ID del usuario que solicita (query parameter)
+    - **limit**: Número de mensajes a obtener
 
     Usa caché Redis para mejor rendimiento. Si no hay caché,
     consulta la DB y actualiza el caché.
     """
+    # Validar que el usuario es participante de la sala
+    is_participant = db.query(RoomParticipant).filter(
+        RoomParticipant.room_id == room_id,
+        RoomParticipant.user_id == requesting_user_id
+    ).first()
+
+    if not is_participant:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a participant of this chat room"
+        )
+
     # Intentar obtener del caché
     try:
         cached_messages = message_cache.get_cached_messages(room_id, limit)

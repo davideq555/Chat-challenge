@@ -13,10 +13,13 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL not found in environment variables")
 
+# Configurar echo desde variable de entorno (por defecto False)
+DB_ECHO = os.getenv("DB_ECHO", "false").lower() == "true"
+
 # Crear engine de SQLAlchemy
 engine = create_engine(
     DATABASE_URL,
-    echo=True,  # Cambia a False en producción para no mostrar queries
+    echo=DB_ECHO,  # Mostrar queries SQL solo si DB_ECHO=true en .env
     pool_pre_ping=True  # Verifica conexiones antes de usarlas
 )
 

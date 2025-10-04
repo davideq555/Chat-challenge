@@ -7,5 +7,6 @@ from .user import User
 from .chat_room import ChatRoom
 from .message import Message
 from .attachment import Attachment
+from .room_participant import RoomParticipant
 
-__all__ = ["Base", "User", "ChatRoom", "Message", "Attachment"]
+__all__ = ["Base", "User", "ChatRoom", "Message", "Attachment", "RoomParticipant"]

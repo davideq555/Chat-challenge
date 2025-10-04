@@ -33,6 +33,14 @@ def db_session():
 def client(db_session):
     """Fixture que proporciona un cliente de prueba para cada test"""
 
+    # Limpiar caché de Redis antes de cada test
+    try:
+        from app.redis_client import redis_client
+        redis_client.flushdb()
+    except Exception:
+        # Si Redis no está disponible, continuar sin error
+        pass
+
     # Sobrescribir la dependency get_db para usar la DB de prueba
     def override_get_db():
         try:
