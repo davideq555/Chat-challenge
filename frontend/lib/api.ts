@@ -44,14 +44,22 @@ class ApiClient {
   // Users
   async login(email: string, password: string) {
     // Backend acepta email o username en el campo 'username'
-    const user = await this.request<any>('/users/login', {
+    const response = await this.request<{
+      access_token: string
+      token_type: string
+      user: any
+    }>('/users/login', {
       method: 'POST',
       body: JSON.stringify({ username: email, password }),
     })
 
-    // Como no hay JWT implementado, retornamos el usuario directamente
-    // El token se puede simular o usar el user.id como identificador
-    return { user, token: `user_${user.id}` }
+    // Guardar token JWT en localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('token', response.access_token)
+      localStorage.setItem('user', JSON.stringify(response.user))
+    }
+
+    return { user: response.user, token: response.access_token }
   }
 
   async register(username: string, email: string, password: string) {
@@ -59,6 +67,21 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify({ username, email, password }),
     })
+  }
+
+  logout() {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+    }
+  }
+
+  getStoredUser(): any | null {
+    if (typeof window !== 'undefined') {
+      const userStr = localStorage.getItem('user')
+      return userStr ? JSON.parse(userStr) : null
+    }
+    return null
   }
 
   async getUser(userId: number) {

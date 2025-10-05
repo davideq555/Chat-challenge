@@ -45,7 +45,6 @@ export function ChatLayout() {
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set())
 
   const ws = useWebSocket((message) => {
-    console.log("[v0] Received WebSocket message:", message)
 
     switch (message.type) {
       case "message":
