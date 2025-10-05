@@ -219,7 +219,7 @@ def test_login_invalid_credentials(client):
         "password": "wrongpassword"
     })
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
-    assert "Invalid credentials" in response.json()["detail"]
+    assert "Credenciales invalidas" in response.json()["detail"]
 
 def test_login_inactive_user(client):
     """Test login con usuario inactivo"""

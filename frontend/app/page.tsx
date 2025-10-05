@@ -31,7 +31,7 @@ export default function WelcomePage() {
               Conecta con quien quieras, cuando quieras
             </h1>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto text-pretty">
-              Mensajería instantánea, segura y confiable. Comparte mensajes, imágenes y documentos en tiempo real.
+              Mensajería instantánea, segura y confiable. Comparte mensajes, imágenes y documentos.
             </p>
           </div>
 
@@ -56,7 +56,7 @@ export default function WelcomePage() {
               </div>
               <h3 className="text-xl font-semibold text-card-foreground">Tiempo Real</h3>
               <p className="text-muted-foreground">
-                Mensajes instantáneos con WebSocket. Ve cuando tus contactos están en línea.
+                Mensajes instantáneos con WebSocket. 
               </p>
             </div>
 

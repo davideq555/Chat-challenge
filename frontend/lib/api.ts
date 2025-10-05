@@ -114,6 +114,13 @@ class ApiClient {
     return this.request<any[]>('/users/')
   }
 
+  async updateUser(userId: number, data: { password?: string; is_public?: boolean }) {
+    return this.request<any>(`/users/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
   async getAvailableUsersForChat() {
     return this.request<any[]>('/users/available-for-chat')
   }

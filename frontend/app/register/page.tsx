@@ -17,7 +17,7 @@ export default function RegisterPage() {
       </div>
 
       <div className="absolute top-4 right-4">
-        <ThemeToggle />
+        {/* <ThemeToggle /> */}
       </div>
 
       <div className="w-full max-w-md space-y-4">

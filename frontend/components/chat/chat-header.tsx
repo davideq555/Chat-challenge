@@ -1,6 +1,6 @@
 "use client"
 
-import { MessageSquare, LogOut, Users, KeyRound } from "lucide-react"
+import { MessageSquare, LogOut, Users, KeyRound, Settings } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
@@ -48,7 +48,7 @@ export function ChatHeader({ currentUser }: ChatHeaderProps) {
       </div>
 
       <div className="flex items-center gap-2">
-        {/* <ThemeToggle /> */}
+        {/* {/* <ThemeToggle /> */} */}
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -73,10 +73,10 @@ export function ChatHeader({ currentUser }: ChatHeaderProps) {
               </div>
             </div>
             <DropdownMenuSeparator />
-            {/* <DropdownMenuItem onClick={() => router.push("/settings")}>
+            <DropdownMenuItem onClick={() => router.push("/settings")}>
               <Settings className="mr-2 h-4 w-4" />
               Configuración
-            </DropdownMenuItem> */}
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => router.push("/contacts")}>
               <Users className="mr-2 h-4 w-4" />
               Contactos

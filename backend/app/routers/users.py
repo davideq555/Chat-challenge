@@ -203,6 +203,9 @@ async def update_user(user_id: int, user_data: UserUpdate, db: Session = Depends
     if user_data.is_active is not None:
         user.is_active = user_data.is_active
 
+    if user_data.is_public is not None:
+        user.is_public = user_data.is_public
+
     db.commit()
     db.refresh(user)
 
@@ -240,14 +243,14 @@ async def login(credentials: UserLogin, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials"
+            detail="Credenciales invalidas"
         )
 
     # Verificar contraseña con bcrypt
     if not verify_password(credentials.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials"
+            detail="Credenciales invalidas"
         )
 
     # Verificar que la cuenta esté activa
