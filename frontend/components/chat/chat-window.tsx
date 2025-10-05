@@ -95,13 +95,13 @@ export function ChatWindow({ selectedConversation, currentUser, onBack }: ChatWi
       // Load latest messages from backend
       const messages = await apiClient.getLatestMessages(roomId, 50)
       // Transform backend messages to frontend format
-      const transformedMessages = messages.map((msg: any) => ({
+      const transformedMessages: Message[] = messages.map((msg: any) => ({
         id: msg.id.toString(),
         content: msg.content,
         senderId: msg.user_id.toString(),
         receiverId: userId,
         timestamp: msg.created_at,
-        type: "text",
+        type: "text" as const,
         isDeleted: msg.is_deleted,
       }))
 

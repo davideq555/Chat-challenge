@@ -311,11 +311,14 @@ async def get_latest_messages(
             detail="You are not a participant of this chat room"
         )
 
-    # Consultar DB
+    # Consultar DB (orden descendente para obtener los más recientes primero)
     messages = db.query(Message).filter(
         Message.room_id == room_id,
         Message.is_deleted == False
-    ).order_by(Message.created_at.asc()).limit(limit).all()
+    ).order_by(Message.created_at.desc()).limit(limit).all()
+
+    # Invertir el orden para mostrarlos cronológicamente (más antiguo primero)
+    messages = list(reversed(messages))
 
     # Actualizar caché con resultados de la DB
     try:
