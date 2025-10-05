@@ -322,9 +322,21 @@ export function ChatWindow({ selectedConversation, currentUser, onBack }: ChatWi
       {/* Messages Area */}
       <ScrollArea className="flex-1 min-h-0 p-4">
         <div className="space-y-4 max-w-4xl mx-auto">
-          {messages.map((message) => (
-            <MessageBubble key={message.id} message={message} isOwn={message.senderId === currentUser.id.toString()} />
-          ))}
+          {messages.map((message) => {
+            // Buscar el nombre del usuario que envió el mensaje
+            const sender = participants?.find(p => p.id === message.senderId)
+            const senderName = sender ? sender.username : user.username
+
+            return (
+              <MessageBubble
+                key={message.id}
+                message={message}
+                isOwn={message.senderId === currentUser.id.toString()}
+                isGroup={isGroup}
+                senderName={senderName}
+              />
+            )
+          })}
           {/* Elemento invisible para auto-scroll */}
           <div ref={messagesEndRef} />
         </div>

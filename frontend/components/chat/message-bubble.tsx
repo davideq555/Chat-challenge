@@ -11,9 +11,11 @@ import { useState } from "react"
 type MessageBubbleProps = {
   message: Message
   isOwn: boolean
+  isGroup?: boolean
+  senderName?: string
 }
 
-export function MessageBubble({ message, isOwn }: MessageBubbleProps) {
+export function MessageBubble({ message, isOwn, isGroup, senderName }: MessageBubbleProps) {
   const [imageLoaded, setImageLoaded] = useState(false)
 
   const formatTime = (timestamp: string) => {
@@ -114,7 +116,12 @@ export function MessageBubble({ message, isOwn }: MessageBubbleProps) {
   }
 
   return (
-    <div className={cn("flex", isOwn ? "justify-end" : "justify-start")}>
+    <div className={cn("flex flex-col", isOwn ? "items-end" : "items-start")}>
+      {isGroup && !isOwn && senderName && (
+        <span className="text-xs font-medium text-muted-foreground mb-1 ml-2">
+          {senderName}
+        </span>
+      )}
       <div
         className={cn(
           "max-w-[70%] rounded-lg px-4 py-2 shadow-sm",

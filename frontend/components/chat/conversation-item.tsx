@@ -14,7 +14,7 @@ type ConversationItemProps = {
 }
 
 export function ConversationItem({ conversation, isSelected, onClick, currentUserId }: ConversationItemProps) {
-  const { user, lastMessage, unreadCount, isGroup, roomName } = conversation
+  const { user, lastMessage, unreadCount, isGroup, roomName, participants } = conversation
 
   const displayName = isGroup && roomName ? roomName : user.username
 
@@ -43,7 +43,21 @@ export function ConversationItem({ conversation, isSelected, onClick, currentUse
   const getMessagePreview = () => {
     if (!lastMessage) return "Sin mensajes"
 
-    const prefix = lastMessage.senderId === currentUserId ? "Tú: " : ""
+    let prefix = ""
+
+    if (isGroup) {
+      // En grupos, mostrar el nombre del usuario que envió el mensaje
+      if (lastMessage.senderId === currentUserId) {
+        prefix = "Tú: "
+      } else {
+        // Buscar el nombre del participante que envió el mensaje
+        const sender = participants?.find(p => p.id === lastMessage.senderId)
+        prefix = sender ? `${sender.username}: ` : ""
+      }
+    } else {
+      // En chats 1-a-1, solo mostrar "Tú:" si fue el usuario actual
+      prefix = lastMessage.senderId === currentUserId ? "Tú: " : ""
+    }
 
     if (lastMessage.type === "image") return `${prefix}📷 Imagen`
     if (lastMessage.type === "document") return `${prefix}📄 ${lastMessage.fileName || "Documento"}`
