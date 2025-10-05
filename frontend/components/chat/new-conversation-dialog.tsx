@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Loader2 } from "lucide-react"
+import { Search, Loader2, Users, Globe } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -27,14 +27,28 @@ type UserSearchResult = {
   email: string
 }
 
+type Contact = {
+  id: number
+  user_id: number
+  contact_id: number
+  status: string
+  contact: {
+    id: number
+    username: string
+    email: string
+  }
+}
+
 export function NewConversationDialog({
   open,
   onOpenChange,
   onConversationCreated,
 }: NewConversationDialogProps) {
   const [searchQuery, setSearchQuery] = useState("")
-  const [users, setUsers] = useState<UserSearchResult[]>([])
-  const [filteredUsers, setFilteredUsers] = useState<UserSearchResult[]>([])
+  const [contacts, setContacts] = useState<UserSearchResult[]>([])
+  const [publicUsers, setPublicUsers] = useState<UserSearchResult[]>([])
+  const [filteredContacts, setFilteredContacts] = useState<UserSearchResult[]>([])
+  const [filteredPublicUsers, setFilteredPublicUsers] = useState<UserSearchResult[]>([])
   const [loading, setLoading] = useState(false)
   const [creating, setCreating] = useState(false)
 
@@ -45,27 +59,51 @@ export function NewConversationDialog({
   }, [open])
 
   useEffect(() => {
+    const query = searchQuery.toLowerCase()
+
     if (searchQuery.trim() === "") {
-      setFilteredUsers(users)
+      setFilteredContacts(contacts)
+      setFilteredPublicUsers(publicUsers)
     } else {
-      const query = searchQuery.toLowerCase()
-      setFilteredUsers(
-        users.filter(
+      setFilteredContacts(
+        contacts.filter(
+          (user) =>
+            user.username.toLowerCase().includes(query) ||
+            user.email.toLowerCase().includes(query)
+        )
+      )
+      setFilteredPublicUsers(
+        publicUsers.filter(
           (user) =>
             user.username.toLowerCase().includes(query) ||
             user.email.toLowerCase().includes(query)
         )
       )
     }
-  }, [searchQuery, users])
+  }, [searchQuery, contacts, publicUsers])
 
   const loadUsers = async () => {
     setLoading(true)
     try {
-      // Obtener solo usuarios disponibles para chat (sin conversaciones previas)
+      // 1. Cargar contactos aceptados
+      const myContacts: Contact[] = await apiClient.getMyContacts()
+      const contactUsers = myContacts.map(c => ({
+        id: c.contact.id,
+        username: c.contact.username,
+        email: c.contact.email,
+      }))
+
+      // 2. Cargar usuarios disponibles (sin conversaciones previas)
       const availableUsers = await apiClient.getAvailableUsersForChat()
-      setUsers(availableUsers)
-      setFilteredUsers(availableUsers)
+
+      // 3. Filtrar usuarios públicos (excluir contactos ya agregados)
+      const contactIds = new Set(contactUsers.map(c => c.id))
+      const publicUsersFiltered = availableUsers.filter((u: UserSearchResult) => !contactIds.has(u.id))
+
+      setContacts(contactUsers)
+      setPublicUsers(publicUsersFiltered)
+      setFilteredContacts(contactUsers)
+      setFilteredPublicUsers(publicUsersFiltered)
     } catch (error) {
       console.error("Error loading users:", error)
     } finally {
@@ -131,40 +169,92 @@ export function NewConversationDialog({
           </div>
 
           {/* Users List */}
-          <ScrollArea className="h-[300px] pr-4">
+          <ScrollArea className="h-[400px] pr-4">
             {loading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
-            ) : filteredUsers.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground text-sm">
-                {searchQuery ? "No se encontraron usuarios" : "No hay usuarios disponibles"}
-              </div>
             ) : (
-              <div className="space-y-2">
-                {filteredUsers.map((user) => (
-                  <div
-                    key={user.id}
-                    className="flex items-center gap-3 p-3 rounded-lg hover:bg-accent transition-colors"
-                  >
-                    <Avatar className="h-10 w-10">
-                      <AvatarFallback className="bg-primary/10 text-primary">
-                        {getInitials(user.username)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{user.username}</p>
-                      <p className="text-sm text-muted-foreground truncate">{user.email}</p>
+              <div className="space-y-4">
+                {/* Contactos */}
+                {filteredContacts.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-3 px-1">
+                      <Users className="h-4 w-4 text-primary" />
+                      <h3 className="text-sm font-semibold text-foreground">Mis Contactos</h3>
+                      <span className="text-xs text-muted-foreground">({filteredContacts.length})</span>
                     </div>
-                    <Button
-                      size="sm"
-                      onClick={() => handleCreateConversation(user)}
-                      disabled={creating}
-                    >
-                      {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Chatear"}
-                    </Button>
+                    <div className="space-y-2">
+                      {filteredContacts.map((user) => (
+                        <div
+                          key={`contact-${user.id}`}
+                          className="flex items-center gap-3 p-3 rounded-lg hover:bg-accent transition-colors"
+                        >
+                          <Avatar className="h-10 w-10">
+                            <AvatarFallback className="bg-primary/10 text-primary">
+                              {getInitials(user.username)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">{user.username}</p>
+                            <p className="text-sm text-muted-foreground truncate">{user.email}</p>
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={() => handleCreateConversation(user)}
+                            disabled={creating}
+                          >
+                            {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Chatear"}
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                ))}
+                )}
+
+                {/* Usuarios Públicos */}
+                {filteredPublicUsers.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-3 px-1">
+                      <Globe className="h-4 w-4 text-muted-foreground" />
+                      <h3 className="text-sm font-semibold text-foreground">Otros Usuarios</h3>
+                      <span className="text-xs text-muted-foreground">({filteredPublicUsers.length})</span>
+                    </div>
+                    <div className="space-y-2">
+                      {filteredPublicUsers.map((user) => (
+                        <div
+                          key={`public-${user.id}`}
+                          className="flex items-center gap-3 p-3 rounded-lg hover:bg-accent transition-colors"
+                        >
+                          <Avatar className="h-10 w-10">
+                            <AvatarFallback className="bg-muted text-muted-foreground">
+                              {getInitials(user.username)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">{user.username}</p>
+                            <p className="text-sm text-muted-foreground truncate">{user.email}</p>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleCreateConversation(user)}
+                            disabled={creating}
+                          >
+                            {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Chatear"}
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Empty state */}
+                {filteredContacts.length === 0 && filteredPublicUsers.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground text-sm">
+                    {searchQuery ? "No se encontraron usuarios" : "No hay usuarios disponibles"}
+                  </div>
+                )}
               </div>
             )}
           </ScrollArea>

@@ -115,7 +115,7 @@ async def get_pending_requests(
     db: Session = Depends(get_db)
 ):
     """
-    Obtener solicitudes de contacto pendientes (requiere JWT)
+    Obtener solicitudes de contacto pendientes RECIBIDAS (requiere JWT)
 
     Retorna solicitudes recibidas con status='pending'
     """
@@ -132,6 +132,33 @@ async def get_pending_requests(
         if requester_user:
             contact_dict = contact.to_dict()
             contact_dict['contact'] = requester_user
+            result.append(contact_dict)
+
+    return result
+
+@router.get("/sent", response_model=List[ContactWithUser])
+async def get_sent_requests(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Obtener solicitudes de contacto ENVIADAS (requiere JWT)
+
+    Retorna solicitudes enviadas con status='pending'
+    """
+    # Solicitudes donde YO soy el que envió (user_id) y están pendientes
+    sent_requests = db.query(Contact).filter(
+        Contact.user_id == current_user.id,
+        Contact.status == "pending"
+    ).all()
+
+    # Enriquecer con información del usuario al que envié la solicitud
+    result = []
+    for contact in sent_requests:
+        contact_user = db.query(User).filter(User.id == contact.contact_id).first()
+        if contact_user:
+            contact_dict = contact.to_dict()
+            contact_dict['contact'] = contact_user
             result.append(contact_dict)
 
     return result

@@ -59,7 +59,25 @@ export function ChatWindow({ selectedConversation, currentUser, onBack }: ChatWi
         type: "text",
       }
 
-      setMessages((prev) => [...prev, newMessage])
+      // Evitar duplicados: verificar si ya existe un mensaje con mismo contenido y sender reciente
+      setMessages((prev) => {
+        const isDuplicate = prev.some(msg =>
+          msg.content === newMessage.content &&
+          msg.senderId === newMessage.senderId &&
+          Math.abs(new Date(msg.timestamp).getTime() - new Date(newMessage.timestamp).getTime()) < 5000
+        )
+
+        if (isDuplicate) {
+          // Reemplazar mensaje temporal con el mensaje real del backend
+          return prev.map(msg =>
+            msg.id.startsWith('temp-') && msg.content === newMessage.content && msg.senderId === newMessage.senderId
+              ? newMessage
+              : msg
+          )
+        }
+
+        return [...prev, newMessage]
+      })
     } else if (message.type === "typing" && selectedConversation) {
       if (message.data?.senderId === selectedConversation.user.id) {
         setIsTyping(message.data.isTyping)
@@ -123,15 +141,29 @@ export function ChatWindow({ selectedConversation, currentUser, onBack }: ChatWi
     const content = messageInput
     setMessageInput("")
 
+    // Optimistic update: agregar mensaje localmente inmediatamente
+    const optimisticMessage: Message = {
+      id: `temp-${Date.now()}`,
+      content: content,
+      senderId: currentUser.id.toString(),
+      receiverId: selectedConversation.user.id,
+      roomId: selectedConversation.id,
+      timestamp: new Date().toISOString(),
+      type: "text",
+    }
+
+    setMessages((prev) => [...prev, optimisticMessage])
+
     try {
-      // Send via WebSocket only (backend will save to DB and broadcast)
+      // Send via WebSocket (backend will save to DB and broadcast)
       websocketService.send({
         type: "message",
         content: content,
       })
     } catch (error) {
       console.error("Error sending message:", error)
-      // Restore message input on error
+      // Remover mensaje optimista y restaurar input
+      setMessages((prev) => prev.filter(m => m.id !== optimisticMessage.id))
       setMessageInput(content)
     }
   }

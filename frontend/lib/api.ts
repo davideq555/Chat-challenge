@@ -38,6 +38,11 @@ class ApiClient {
       throw new Error(error.message || `HTTP ${response.status}`)
     }
 
+    // 204 No Content no tiene cuerpo para parsear
+    if (response.status === 204) {
+      return undefined as T
+    }
+
     return response.json()
   }
 
@@ -176,6 +181,43 @@ class ApiClient {
 
   async getAttachments(messageId: number) {
     return this.request<any[]>(`/attachments/message/${messageId}/all`)
+  }
+
+  // Contacts
+  async getMyContacts() {
+    return this.request<any[]>('/contacts/my-contacts')
+  }
+
+  async getPendingRequests() {
+    return this.request<any[]>('/contacts/pending')
+  }
+
+  async getSentRequests() {
+    return this.request<any[]>('/contacts/sent')
+  }
+
+  async sendContactRequest(contactId: number) {
+    return this.request<any>('/contacts/', {
+      method: 'POST',
+      body: JSON.stringify({ contact_id: contactId }),
+    })
+  }
+
+  async updateContactStatus(contactId: number, status: 'accepted' | 'blocked') {
+    return this.request<any>(`/contacts/${contactId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ status }),
+    })
+  }
+
+  async deleteContact(contactId: number) {
+    return this.request<void>(`/contacts/${contactId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async searchPublicUsers(query: string) {
+    return this.request<any[]>(`/contacts/search-public-users?query=${encodeURIComponent(query)}`)
   }
 
   // Load conversations with participants and last messages

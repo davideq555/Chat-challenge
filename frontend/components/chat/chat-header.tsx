@@ -1,6 +1,6 @@
 "use client"
 
-import { MessageSquare, Settings, LogOut } from "lucide-react"
+import { MessageSquare, LogOut, Users, KeyRound } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
@@ -11,7 +11,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useRouter } from "next/navigation"
-import { ThemeToggle } from "@/components/theme-toggle"
 import type { User } from "./chat-layout"
 
 type ChatHeaderProps = {
@@ -49,7 +48,7 @@ export function ChatHeader({ currentUser }: ChatHeaderProps) {
       </div>
 
       <div className="flex items-center gap-2">
-        <ThemeToggle />
+        {/* <ThemeToggle /> */}
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -78,8 +77,12 @@ export function ChatHeader({ currentUser }: ChatHeaderProps) {
               <Settings className="mr-2 h-4 w-4" />
               Configuración
             </DropdownMenuItem> */}
+            <DropdownMenuItem onClick={() => router.push("/contacts")}>
+              <Users className="mr-2 h-4 w-4" />
+              Contactos
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => router.push("/forgot-password")}>
-              <Settings className="mr-2 h-4 w-4" />
+              <KeyRound className="mr-2 h-4 w-4" />
               Cambiar Contraseña
             </DropdownMenuItem>
             <DropdownMenuSeparator />
