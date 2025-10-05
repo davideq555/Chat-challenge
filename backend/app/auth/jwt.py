@@ -54,11 +54,14 @@ def verify_token(token: str) -> Optional[TokenData]:
     """
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: int = payload.get("sub")
+        user_id_raw = payload.get("sub")
         username: str = payload.get("username")
 
-        if user_id is None:
+        if user_id_raw is None:
             return None
+
+        # Convertir user_id a int (puede venir como string o int del JWT)
+        user_id = int(user_id_raw) if isinstance(user_id_raw, str) else user_id_raw
 
         return TokenData(user_id=user_id, username=username)
     except JWTError:

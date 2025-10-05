@@ -4,7 +4,7 @@ from typing import Optional
 
 class MessageBase(BaseModel):
     """Schema base de mensaje"""
-    content: str = Field(..., min_length=1, description="Contenido del mensaje")
+    content: str = Field(..., description="Contenido del mensaje")
 
 class MessageCreate(MessageBase):
     """Schema para crear un mensaje (usado internamente)"""
@@ -17,7 +17,7 @@ class MessageCreateRequest(MessageBase):
 
 class MessageUpdate(BaseModel):
     """Schema para actualizar un mensaje (solo contenido)"""
-    content: str = Field(..., min_length=1, description="Nuevo contenido del mensaje")
+    content: str = Field(..., description="Nuevo contenido del mensaje")
 
 class MessageResponse(MessageBase):
     """Schema de respuesta de mensaje"""

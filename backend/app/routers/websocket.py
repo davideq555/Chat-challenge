@@ -7,8 +7,10 @@ import logging
 from app.websockets.manager import manager
 from app.websockets.events import EventType, create_event
 from app.models.message import Message
+from app.models.user import User
 from app.database import get_db
 from app.services.message_cache import message_cache
+from app.auth.jwt import verify_token
 
 logger = logging.getLogger(__name__)
 
@@ -21,19 +23,17 @@ router = APIRouter(
 async def websocket_endpoint(
     websocket: WebSocket,
     room_id: int,
-    user_id: int = Query(..., description="ID del usuario"),
-    username: str = Query(..., description="Nombre del usuario")
+    token: str = Query(..., description="JWT token de autenticación")
 ):
     """
-    WebSocket endpoint para chat en tiempo real
+    WebSocket endpoint para chat en tiempo real (requiere JWT)
 
     Args:
         room_id: ID de la sala de chat
-        user_id: ID del usuario conectándose
-        username: Nombre del usuario
+        token: JWT token de autenticación
 
     Uso:
-        ws://localhost:8000/ws/{room_id}?user_id=1&username=Juan
+        ws://localhost:8000/ws/{room_id}?token=YOUR_JWT_TOKEN
 
     Eventos que se pueden enviar:
         - message: Enviar mensaje
@@ -50,8 +50,31 @@ async def websocket_endpoint(
         - error: Error en el servidor
     """
     connection_id = None
+    db = None
+
+    # Obtener sesión de BD
+    from app.database import SessionLocal
+    db = SessionLocal()
+
+    # Verificar token JWT
+    token_data = verify_token(token)
+    if token_data is None or token_data.user_id is None:
+        logger.warning(f"❌ Token JWT inválido para room={room_id}")
+        await websocket.close(code=1008, reason="Invalid token")
+        db.close()
+        return
 
     try:
+        user = db.query(User).filter(User.id == token_data.user_id).first()
+        if not user:
+            logger.warning(f"❌ Usuario no encontrado: user_id={token_data.user_id}")
+            await websocket.close(code=1008, reason="User not found")
+            db.close()
+            return
+
+        user_id = user.id
+        username = user.username
+
         # Conectar al manager
         connection_id = await manager.connect(websocket, room_id, user_id, username)
         logger.info(f"🔌 WebSocket conectado: user={username}, room={room_id}")
@@ -125,6 +148,10 @@ async def websocket_endpoint(
         # Desconectar del manager
         if connection_id:
             await manager.disconnect(room_id, connection_id)
+
+        # Cerrar sesión de BD
+        if db:
+            db.close()
 
 async def handle_new_message(
     room_id: int,

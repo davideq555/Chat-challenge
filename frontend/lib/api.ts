@@ -43,30 +43,47 @@ class ApiClient {
 
   // Users
   async login(email: string, password: string) {
-    // Backend acepta email o username en el campo 'username'
-    const response = await this.request<{
-      access_token: string
-      token_type: string
-      user: any
-    }>('/users/login', {
+    // Login NO requiere token, así que usamos fetch directamente
+    const response = await fetch(`${this.baseUrl}/users/login`, {
       method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({ username: email, password }),
     })
 
-    // Guardar token JWT en localStorage
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('token', response.access_token)
-      localStorage.setItem('user', JSON.stringify(response.user))
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Error desconocido' }))
+      throw new Error(error.detail || `HTTP ${response.status}`)
     }
 
-    return { user: response.user, token: response.access_token }
+    const data = await response.json()
+
+    // Guardar token JWT en localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('token', data.access_token)
+      localStorage.setItem('user', JSON.stringify(data.user))
+    }
+
+    return { user: data.user, token: data.access_token }
   }
 
   async register(username: string, email: string, password: string) {
-    return this.request<any>('/users/', {
+    // Register NO requiere token, así que usamos fetch directamente
+    const response = await fetch(`${this.baseUrl}/users/`, {
       method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({ username, email, password }),
     })
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Error desconocido' }))
+      throw new Error(error.detail || `HTTP ${response.status}`)
+    }
+
+    return response.json()
   }
 
   logout() {
@@ -93,16 +110,16 @@ class ApiClient {
   }
 
   // Chat Rooms
-  async getChatRooms(userId: number) {
-    return this.request<any[]>(`/chat-rooms/my-rooms/${userId}`)
+  async getChatRooms() {
+    return this.request<any[]>('/chat-rooms/my-rooms')
   }
 
-  async getChatRoom(roomId: number, userId: number) {
-    return this.request<any>(`/chat-rooms/${roomId}?user_id=${userId}`)
+  async getChatRoom(roomId: number) {
+    return this.request<any>(`/chat-rooms/${roomId}`)
   }
 
-  async createChatRoom(creatorId: number, name: string, isGroup: boolean = false) {
-    return this.request<any>(`/chat-rooms/?creator_id=${creatorId}`, {
+  async createChatRoom(name: string, isGroup: boolean = false) {
+    return this.request<any>('/chat-rooms/', {
       method: 'POST',
       body: JSON.stringify({ name, is_group: isGroup }),
     })
@@ -112,7 +129,6 @@ class ApiClient {
   async addParticipant(roomId: number, userId: number) {
     return this.request<any>(`/chat-rooms/${roomId}/participants?user_id=${userId}`, {
       method: 'POST',
-      body: JSON.stringify({ user_id: userId }),
     })
   }
 
@@ -121,23 +137,23 @@ class ApiClient {
   }
 
   // Messages
-  async getMessages(roomId: number, requestingUserId: number) {
-    return this.request<any[]>(`/messages/?requesting_user_id=${requestingUserId}&room_id=${roomId}`)
+  async getMessages(roomId: number) {
+    return this.request<any[]>(`/messages/?room_id=${roomId}`)
   }
 
-  async getLatestMessages(roomId: number, requestingUserId: number, limit: number = 50) {
-    return this.request<any[]>(`/messages/room/${roomId}/latest?requesting_user_id=${requestingUserId}&limit=${limit}`)
+  async getLatestMessages(roomId: number, limit: number = 50) {
+    return this.request<any[]>(`/messages/room/${roomId}/latest?limit=${limit}`)
   }
 
-  async sendMessage(roomId: number, userId: number, content: string) {
+  async sendMessage(roomId: number, content: string) {
     return this.request<any>('/messages/', {
       method: 'POST',
-      body: JSON.stringify({ room_id: roomId, user_id: userId, content }),
+      body: JSON.stringify({ room_id: roomId, content }),
     })
   }
 
-  async deleteMessage(messageId: number, requestingUserId: number, hard: boolean = false) {
-    return this.request<any>(`/messages/${messageId}?requesting_user_id=${requestingUserId}${hard ? '&hard=true' : ''}`, {
+  async deleteMessage(messageId: number, hard: boolean = false) {
+    return this.request<any>(`/messages/${messageId}${hard ? '?hard=true' : ''}`, {
       method: 'DELETE',
     })
   }
@@ -155,21 +171,27 @@ class ApiClient {
   }
 
   // Load conversations with participants and last messages
-  async loadUserConversations(userId: number) {
+  async loadUserConversations() {
     try {
+      // Get current user from storage
+      const currentUser = this.getStoredUser()
+      if (!currentUser) {
+        throw new Error('No user logged in')
+      }
+
       // Get user's rooms
-      const rooms = await this.getChatRooms(userId)
+      const rooms = await this.getChatRooms()
 
       // For each room, get participants and latest message
       const conversations = await Promise.all(
         rooms.map(async (room: any) => {
           const [participants, messages] = await Promise.all([
             this.getRoomParticipants(room.id),
-            this.getLatestMessages(room.id, userId, 1).catch(() => [])
+            this.getLatestMessages(room.id, 1).catch(() => [])
           ])
 
           // Find the other participant (not the current user)
-          const otherParticipantData = participants.find((p: any) => p.user_id !== userId)
+          const otherParticipantData = participants.find((p: any) => p.user_id !== currentUser.id)
 
           // If there's another participant, get their full user data
           let otherParticipant = null

@@ -311,20 +311,11 @@ async def get_latest_messages(
             detail="You are not a participant of this chat room"
         )
 
-    # Intentar obtener del caché
-    try:
-        cached_messages = message_cache.get_cached_messages(room_id, limit)
-        if cached_messages is not None:
-            logger.info(f"✅ Mensajes obtenidos del caché para sala {room_id}")
-            return cached_messages
-    except Exception as e:
-        logger.warning(f"Error leyendo caché: {e}, consultando DB...")
-
-    # Si no hay caché, consultar DB
+    # Consultar DB
     messages = db.query(Message).filter(
         Message.room_id == room_id,
         Message.is_deleted == False
-    ).order_by(Message.created_at.desc()).limit(limit).all()
+    ).order_by(Message.created_at.asc()).limit(limit).all()
 
     # Actualizar caché con resultados de la DB
     try:

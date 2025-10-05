@@ -19,7 +19,7 @@ class MessageCache:
     @staticmethod
     def cache_message(room_id: int, message_data: dict) -> bool:
         """
-        Agregar mensaje al caché de una sala
+        Agregar mensaje al caché de una sala (solo si el cache ya existe)
 
         Args:
             room_id: ID de la sala
@@ -31,13 +31,19 @@ class MessageCache:
         try:
             key = MessageCache._get_room_key(room_id)
 
+            # Solo agregar si el cache ya existe (fue poblado por DB)
+            # Esto evita crear caches parciales con 1-2 mensajes
+            if not redis_client.exists(key):
+                logger.info(f"⏭️ Cache no existe para sala {room_id}, mensaje no cacheado (se poblará en próxima consulta)")
+                return False
+
             # Agregar mensaje al inicio de la lista
             redis_client.lpush(key, message_data)
 
             # Mantener solo los últimos MAX_CACHED_MESSAGES
             redis_client.ltrim(key, 0, MessageCache.MAX_CACHED_MESSAGES - 1)
 
-            # Establecer TTL
+            # Refrescar TTL
             redis_client.expire(key, MessageCache.CACHE_TTL)
 
             logger.info(f"✅ Mensaje cacheado en sala {room_id}")
