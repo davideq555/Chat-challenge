@@ -118,7 +118,7 @@ export function ChatLayout() {
 
       try {
         // Cargar conversaciones reales desde el backend
-        const backendConversations = await apiClient.loadUserConversations(user.id)
+        const backendConversations = await apiClient.loadUserConversations()
 
         // Transformar al formato del frontend
         const transformedConversations: Conversation[] = backendConversations

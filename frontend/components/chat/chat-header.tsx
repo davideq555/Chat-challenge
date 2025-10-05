@@ -74,10 +74,10 @@ export function ChatHeader({ currentUser }: ChatHeaderProps) {
               </div>
             </div>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => router.push("/settings")}>
+            {/* <DropdownMenuItem onClick={() => router.push("/settings")}>
               <Settings className="mr-2 h-4 w-4" />
               Configuración
-            </DropdownMenuItem>
+            </DropdownMenuItem> */}
             <DropdownMenuItem onClick={() => router.push("/forgot-password")}>
               <Settings className="mr-2 h-4 w-4" />
               Cambiar Contraseña

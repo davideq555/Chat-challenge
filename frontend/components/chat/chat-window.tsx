@@ -26,21 +26,27 @@ export function ChatWindow({ selectedConversation, currentUser }: ChatWindowProp
   const [isTyping, setIsTyping] = useState(false)
   const [fileDialogOpen, setFileDialogOpen] = useState(false)
   const [uploadType, setUploadType] = useState<"image" | "document">("image")
-  const scrollRef = useRef<HTMLDivElement>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
   const typingTimeoutRef = useRef<NodeJS.Timeout>()
 
   const ws = useWebSocket((message) => {
     if (message.type === "message" && selectedConversation) {
-      const newMessage = message.data as Message
-      // Only add message if it's for this conversation
-      if (
-        (newMessage.senderId === selectedConversation.user.id && newMessage.receiverId === currentUser.id) ||
-        (newMessage.senderId === currentUser.id && newMessage.receiverId === selectedConversation.user.id)
-      ) {
-        setMessages((prev) => [...prev, newMessage])
+      // Backend sends message data inside "data" property
+      const msgData = message.data
+
+      // Transform backend message to frontend format
+      const newMessage: Message = {
+        id: msgData?.id?.toString() || Date.now().toString(),
+        content: msgData?.content || "",
+        senderId: msgData?.user_id?.toString() || "",
+        receiverId: selectedConversation.user.id,
+        timestamp: msgData?.created_at || new Date().toISOString(),
+        type: "text",
       }
+
+      setMessages((prev) => [...prev, newMessage])
     } else if (message.type === "typing" && selectedConversation) {
-      if (message.data.senderId === selectedConversation.user.id) {
+      if (message.data?.senderId === selectedConversation.user.id) {
         setIsTyping(message.data.isTyping)
       }
     }
@@ -67,19 +73,12 @@ export function ChatWindow({ selectedConversation, currentUser }: ChatWindowProp
 
   const loadMessages = async (userId: string) => {
     try {
-      // Get current user from localStorage
-      const userStr = localStorage.getItem("user")
-      if (!userStr) return
-
-      const currentUserData = JSON.parse(userStr)
-
       // For now, we assume the room ID is the conversation ID
       // In a real app, you'd get the room ID from the conversation object
       const roomId = parseInt(selectedConversation?.id || "1")
 
       // Load latest messages from backend
-      const messages = await apiClient.getLatestMessages(roomId, currentUserData.id, 50)
-
+      const messages = await apiClient.getLatestMessages(roomId, 50)
       // Transform backend messages to frontend format
       const transformedMessages = messages.map((msg: any) => ({
         id: msg.id.toString(),
@@ -100,9 +99,7 @@ export function ChatWindow({ selectedConversation, currentUser }: ChatWindowProp
 
   useEffect(() => {
     // Auto-scroll al final cuando hay nuevos mensajes
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
   const handleSendMessage = async () => {
@@ -112,30 +109,11 @@ export function ChatWindow({ selectedConversation, currentUser }: ChatWindowProp
     setMessageInput("")
 
     try {
-      // Get current user from localStorage
-      const userStr = localStorage.getItem("user")
-      if (!userStr) return
-
-      const currentUserData = JSON.parse(userStr)
-      const roomId = parseInt(selectedConversation.id || "1")
-
-      // Send message to backend
-      const savedMessage = await apiClient.sendMessage(roomId, currentUserData.id, content)
-
-      // Create message for local display
-      const newMessage: Message = {
-        id: savedMessage.id.toString(),
-        content: savedMessage.content,
-        senderId: currentUserData.id.toString(),
-        receiverId: selectedConversation.user.id,
-        timestamp: savedMessage.created_at,
-        type: "text",
-      }
-
-      setMessages([...messages, newMessage])
-
-      // Send via WebSocket for real-time delivery
-      websocketService.sendMessage(newMessage)
+      // Send via WebSocket only (backend will save to DB and broadcast)
+      websocketService.send({
+        type: "message",
+        content: content,
+      })
     } catch (error) {
       console.error("Error sending message:", error)
       // Restore message input on error
@@ -264,9 +242,9 @@ export function ChatWindow({ selectedConversation, currentUser }: ChatWindowProp
   const { user } = selectedConversation
 
   return (
-    <div className="flex-1 flex flex-col bg-[var(--chat-bg)]">
+    <div className="flex-1 flex flex-col bg-[var(--chat-bg)] min-h-0">
       {/* Chat Header */}
-      <div className="h-16 border-b border-border bg-card flex items-center justify-between px-4">
+      <div className="shrink-0 h-16 border-b border-border bg-card flex items-center justify-between px-4">
         <div className="flex items-center gap-3">
           <div className="relative">
             <Avatar>
@@ -290,26 +268,22 @@ export function ChatWindow({ selectedConversation, currentUser }: ChatWindowProp
       </div>
 
       {/* Messages Area */}
-      <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+      <ScrollArea className="flex-1 min-h-0 p-4">
         <div className="space-y-4 max-w-4xl mx-auto">
           {messages.map((message) => (
-            <MessageBubble key={message.id} message={message} isOwn={message.senderId === currentUser.id} />
+            <MessageBubble key={message.id} message={message} isOwn={message.senderId === currentUser.id.toString()} />
           ))}
+          {/* Elemento invisible para auto-scroll */}
+          <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
 
       {/* Input Area */}
-      <div className="border-t border-border bg-card p-4">
+      <div className="shrink-0 border-t border-border bg-card p-4">
         <div className="flex items-end gap-2 max-w-4xl mx-auto">
           <div className="flex gap-1">
             <Button variant="ghost" size="icon" title="Adjuntar archivo" onClick={handleDocumentUpload}>
               <Paperclip className="h-5 w-5" />
-            </Button>
-            <Button variant="ghost" size="icon" title="Enviar imagen" onClick={handleImageUpload}>
-              <ImageIcon className="h-5 w-5" />
-            </Button>
-            <Button variant="ghost" size="icon" title="Enviar documento" onClick={handleDocumentUpload}>
-              <File className="h-5 w-5" />
             </Button>
           </div>
 

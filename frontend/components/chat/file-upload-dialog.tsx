@@ -103,6 +103,7 @@ export function FileUploadDialog({
             >
               <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
               <p className="text-sm text-muted-foreground mb-2">Haz clic para seleccionar un archivo</p>
+              <p className="text-sm text-muted-foreground mb-2">Momentaneamente solo fotos y documentos</p>
               <p className="text-xs text-muted-foreground">Máximo {maxSize / 1024 / 1024}MB</p>
               <input
                 ref={fileInputRef}

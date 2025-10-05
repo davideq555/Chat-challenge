@@ -118,13 +118,17 @@ export function MessageBubble({ message, isOwn }: MessageBubbleProps) {
       <div
         className={cn(
           "max-w-[70%] rounded-lg px-4 py-2 shadow-sm",
-          isOwn ? "bg-[var(--chat-bubble-sent)] text-foreground" : "bg-[var(--chat-bubble-received)] text-foreground",
+          isOwn
+            ? "bg-primary text-primary-foreground"
+            : "bg-muted text-foreground",
         )}
       >
         {renderMessageContent()}
         <div className={cn("flex items-center gap-1 mt-1", isOwn ? "justify-end" : "justify-start")}>
-          <span className="text-xs text-muted-foreground">{formatTime(message.timestamp)}</span>
-          {isOwn && <CheckCheck className="h-3.5 w-3.5 text-primary" />}
+          <span className={cn("text-xs", isOwn ? "text-primary-foreground/70" : "text-muted-foreground")}>
+            {formatTime(message.timestamp)}
+          </span>
+          {isOwn && <CheckCheck className="h-3.5 w-3.5 text-primary-foreground/70" />}
         </div>
       </div>
     </div>
