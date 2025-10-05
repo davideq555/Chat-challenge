@@ -12,7 +12,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "ChatApp - Mensajería en Tiempo Real",
   description: "Aplicación de chat en tiempo real con soporte para archivos e imágenes.",
-    generator: 'v0.app'
+  generator: 'v0.app'
 }
 
 export default function RootLayout({
@@ -22,6 +22,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" className={`${inter.variable} antialiased`} suppressHydrationWarning>
+      <head>
+        <link rel="icon" href="/favicon.ico"></link>
+      </head>
       <body>
         <ThemeProvider>{children}</ThemeProvider>
       </body>
