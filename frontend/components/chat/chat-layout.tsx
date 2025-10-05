@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation"
 import { websocketService } from "@/lib/websocket"
 import { useWebSocket } from "@/hooks/use-websocket"
 import { apiClient } from "@/lib/api"
+import { Loader2 } from "lucide-react"
 
 export type User = {
   id: string
@@ -35,6 +36,9 @@ export type Conversation = {
   user: User
   lastMessage?: Message
   unreadCount: number
+  isGroup?: boolean
+  roomName?: string
+  participants?: User[]
 }
 
 export function ChatLayout() {
@@ -43,6 +47,7 @@ export function ChatLayout() {
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set())
+  const [isInitialLoad, setIsInitialLoad] = useState(true)
 
   const ws = useWebSocket((message) => {
 
@@ -134,27 +139,48 @@ export function ChatLayout() {
 
       // Transformar al formato del frontend
       const transformedConversations: Conversation[] = backendConversations
-        .filter((conv: any) => conv.otherParticipant) // Solo mostrar salas con otro participante
         .map((conv: any) => {
           const lastMsg = conv.lastMessage
+          const isGroup = conv.room.is_group
+
+          // Para chats grupales o sin otherParticipant, usar info del room
+          const displayUser = conv.otherParticipant ? {
+            id: conv.otherParticipant.user.id.toString(),
+            username: conv.otherParticipant.user.username,
+            email: conv.otherParticipant.user.email,
+            isOnline: false,
+          } : {
+            id: conv.room.id.toString(),
+            username: conv.room.name || "Sala sin nombre",
+            email: "",
+            isOnline: false,
+          }
+
+          // Transformar participantes (excluyendo al usuario actual para el header)
+          const participants: User[] = conv.participants
+            .filter((p: any) => p.user_id !== user.id)
+            .map((p: any) => ({
+              id: p.user_id.toString(),
+              username: p.user?.username || "Usuario",
+              email: p.user?.email || "",
+              isOnline: false,
+            }))
 
           return {
             id: conv.room.id.toString(),
-            user: {
-              id: conv.otherParticipant.user.id.toString(),
-              username: conv.otherParticipant.user.username,
-              email: conv.otherParticipant.user.email,
-              isOnline: false, // TODO: Implementar estado online con WebSocket
-            },
+            user: displayUser,
             lastMessage: lastMsg ? {
               id: lastMsg.id.toString(),
               content: lastMsg.content,
               senderId: lastMsg.user_id.toString(),
-              receiverId: conv.otherParticipant.user.id.toString(),
+              receiverId: conv.otherParticipant?.user.id.toString() || "",
               timestamp: lastMsg.created_at,
               type: "text",
             } : undefined,
             unreadCount: 0, // TODO: Implementar contador de no leídos
+            isGroup: isGroup,
+            roomName: conv.room.name,
+            participants,
           }
         })
 
@@ -162,6 +188,8 @@ export function ChatLayout() {
     } catch (error) {
       console.error("Error loading conversations:", error)
       setConversations([])
+    } finally {
+      setIsInitialLoad(false)
     }
   }
 
@@ -179,10 +207,13 @@ export function ChatLayout() {
     }
   }, [router])
 
-  if (!currentUser) {
+  if (isInitialLoad) {
     return (
-      <div className="h-screen flex items-center justify-center bg-background">
-        <div className="text-muted-foreground">Cargando...</div>
+      <div className="h-screen flex flex-col items-center justify-center bg-background gap-4">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <div className="text-muted-foreground text-sm">
+          {!currentUser ? "Verificando autenticación..." : "Cargando conversaciones..."}
+        </div>
       </div>
     )
   }

@@ -190,7 +190,7 @@ export function ChatWindow({ selectedConversation, currentUser, onBack }: ChatWi
     }
   }
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
       handleSendMessage()
@@ -265,7 +265,9 @@ export function ChatWindow({ selectedConversation, currentUser, onBack }: ChatWi
     )
   }
 
-  const { user } = selectedConversation
+  const { user, isGroup, roomName, participants } = selectedConversation
+  const displayName = isGroup && roomName ? roomName : user.username
+  const participantNames = isGroup && participants ? participants.map(p => p.username).join(', ') : ''
 
   return (
     <div className="flex-1 flex flex-col bg-[var(--chat-bg)] min-h-0">
@@ -285,16 +287,19 @@ export function ChatWindow({ selectedConversation, currentUser, onBack }: ChatWi
           )}
           <div className="relative">
             <Avatar>
-              <AvatarFallback className="bg-primary/10 text-primary">{getInitials(user.username)}</AvatarFallback>
+              <AvatarFallback className="bg-primary/10 text-primary">{getInitials(displayName)}</AvatarFallback>
             </Avatar>
-            {user.isOnline && (
+            {!isGroup && user.isOnline && (
               <div className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-[var(--online-indicator)] border-2 border-card" />
             )}
           </div>
           <div>
-            <h3 className="font-semibold text-card-foreground">{user.username}</h3>
+            <h3 className="font-semibold text-card-foreground">{displayName}</h3>
             <p className="text-xs text-muted-foreground">
-              {isTyping ? "Escribiendo..." : user.isOnline ? "En línea" : user.lastSeen || "Desconectado"}
+              {isGroup
+                ? participantNames ? `(${participantNames})` : 'Grupo'
+                : isTyping ? "Escribiendo..." : user.isOnline ? "En línea" : user.lastSeen || "Desconectado"
+              }
             </p>
           </div>
         </div>
@@ -339,7 +344,7 @@ export function ChatWindow({ selectedConversation, currentUser, onBack }: ChatWi
               placeholder="Escribe un mensaje..."
               value={messageInput}
               onChange={handleInputChange}
-              onKeyPress={handleKeyPress}
+              onKeyDown={handleKeyDown}
               className="pr-10"
             />
             <Popover open={emojiPickerOpen} onOpenChange={setEmojiPickerOpen}>

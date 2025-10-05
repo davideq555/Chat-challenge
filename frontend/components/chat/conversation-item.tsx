@@ -14,7 +14,9 @@ type ConversationItemProps = {
 }
 
 export function ConversationItem({ conversation, isSelected, onClick, currentUserId }: ConversationItemProps) {
-  const { user, lastMessage, unreadCount } = conversation
+  const { user, lastMessage, unreadCount, isGroup, roomName } = conversation
+
+  const displayName = isGroup && roomName ? roomName : user.username
 
   const getInitials = (username: string) => {
     // Si el username tiene espacios, tomar iniciales de cada palabra
@@ -59,16 +61,16 @@ export function ConversationItem({ conversation, isSelected, onClick, currentUse
     >
       <div className="relative">
         <Avatar>
-          <AvatarFallback className="bg-primary/10 text-primary">{getInitials(user.username)}</AvatarFallback>
+          <AvatarFallback className="bg-primary/10 text-primary">{getInitials(displayName)}</AvatarFallback>
         </Avatar>
-        {user.isOnline && (
+        {!isGroup && user.isOnline && (
           <div className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-[var(--online-indicator)] border-2 border-card" />
         )}
       </div>
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2 mb-1">
-          <span className="font-semibold text-card-foreground truncate">{user.username}</span>
+          <span className="font-semibold text-card-foreground truncate">{displayName}</span>
           {lastMessage && (
             <span className="text-xs text-muted-foreground flex-shrink-0">{formatTime(lastMessage.timestamp)}</span>
           )}

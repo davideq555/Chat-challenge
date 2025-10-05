@@ -193,23 +193,24 @@ class ApiClient {
       // For each room, get participants and latest message
       const conversations = await Promise.all(
         rooms.map(async (room: any) => {
-          const [participants, messages] = await Promise.all([
+          const [participantsData, messages] = await Promise.all([
             this.getRoomParticipants(room.id),
             this.getLatestMessages(room.id, 1).catch(() => [])
           ])
 
-          // Find the other participant (not the current user)
-          const otherParticipantData = participants.find((p: any) => p.user_id !== currentUser.id)
+          // Get full user data for all participants
+          const participants = await Promise.all(
+            participantsData.map(async (p: any) => {
+              const userData = await this.getUser(p.user_id)
+              return {
+                ...p,
+                user: userData
+              }
+            })
+          )
 
-          // If there's another participant, get their full user data
-          let otherParticipant = null
-          if (otherParticipantData) {
-            const userData = await this.getUser(otherParticipantData.user_id)
-            otherParticipant = {
-              ...otherParticipantData,
-              user: userData
-            }
-          }
+          // Find the other participant (not the current user)
+          const otherParticipant = participants.find((p: any) => p.user_id !== currentUser.id) || null
 
           return {
             room,
