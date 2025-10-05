@@ -8,9 +8,16 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Send, Paperclip, ImageIcon, File, Smile, MoreVertical, ArrowLeft } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Send, Paperclip, ImageIcon, File, Smile, MoreVertical, ArrowLeft, UserPlus } from "lucide-react"
 import { MessageBubble } from "./message-bubble"
 import { FileUploadDialog } from "./file-upload-dialog"
+import { AddParticipantDialog } from "./add-participant-dialog"
 import type { Conversation, User, Message } from "./chat-layout"
 import { websocketService } from "@/lib/websocket"
 import { useWebSocket } from "@/hooks/use-websocket"
@@ -33,6 +40,7 @@ export function ChatWindow({ selectedConversation, currentUser, onBack }: ChatWi
   const [fileDialogOpen, setFileDialogOpen] = useState(false)
   const [uploadType, setUploadType] = useState<"image" | "document">("image")
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false)
+  const [addParticipantOpen, setAddParticipantOpen] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const typingTimeoutRef = useRef<NodeJS.Timeout>()
 
@@ -224,6 +232,11 @@ export function ChatWindow({ selectedConversation, currentUser, onBack }: ChatWi
     setEmojiPickerOpen(false)
   }
 
+  const handleParticipantAdded = () => {
+    // Optionally refresh room participants or show notification
+    console.log("Participante añadido exitosamente")
+  }
+
   const getInitials = (username: string) => {
     // Si el username tiene espacios, tomar iniciales de cada palabra
     // Si no, tomar las primeras 2 letras
@@ -286,9 +299,19 @@ export function ChatWindow({ selectedConversation, currentUser, onBack }: ChatWi
           </div>
         </div>
 
-        <Button variant="ghost" size="icon">
-          <MoreVertical className="h-5 w-5" />
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon">
+              <MoreVertical className="h-5 w-5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => setAddParticipantOpen(true)}>
+              <UserPlus className="h-4 w-4 mr-2" />
+              Añadir participante
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Messages Area */}
@@ -348,6 +371,14 @@ export function ChatWindow({ selectedConversation, currentUser, onBack }: ChatWi
         onOpenChange={setFileDialogOpen}
         onUpload={handleFileUpload}
         acceptedTypes={uploadType === "image" ? "image/*" : "application/pdf,.doc,.docx,.txt,.zip"}
+      />
+
+      {/* Add Participant Dialog */}
+      <AddParticipantDialog
+        open={addParticipantOpen}
+        onOpenChange={setAddParticipantOpen}
+        roomId={selectedConversation.id}
+        onParticipantAdded={handleParticipantAdded}
       />
     </div>
   )

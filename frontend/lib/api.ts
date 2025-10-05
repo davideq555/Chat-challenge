@@ -113,6 +113,10 @@ class ApiClient {
     return this.request<any[]>('/users/available-for-chat')
   }
 
+  async getAvailableUsersForRoom(roomId: number) {
+    return this.request<any[]>(`/users/available-for-room/${roomId}`)
+  }
+
   // Chat Rooms
   async getChatRooms() {
     return this.request<any[]>('/chat-rooms/my-rooms')

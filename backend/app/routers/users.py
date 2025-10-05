@@ -97,6 +97,63 @@ async def get_available_users_for_chat(
 
     return available_users
 
+@router.get("/available-for-room/{room_id}", response_model=List[UserResponse])
+async def get_available_users_for_room(
+    room_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Obtener usuarios disponibles para añadir a una sala (requiere JWT)
+
+    Retorna usuarios que NO son participantes de la sala especificada
+    y excluye al usuario actual.
+
+    Args:
+        room_id: ID de la sala
+
+    Returns:
+        Lista de usuarios disponibles para añadir a la sala
+    """
+    from app.models.chat_room import ChatRoom
+    from app.models.room_participant import RoomParticipant
+
+    # Verificar que la sala existe
+    room = db.query(ChatRoom).filter(ChatRoom.id == room_id).first()
+    if not room:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Room not found"
+        )
+
+    # Verificar que el usuario actual es participante de la sala
+    is_participant = db.query(RoomParticipant).filter(
+        RoomParticipant.room_id == room_id,
+        RoomParticipant.user_id == current_user.id
+    ).first()
+
+    if not is_participant:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a participant of this room"
+        )
+
+    # Obtener IDs de usuarios que ya son participantes de esta sala
+    current_participants = db.query(RoomParticipant.user_id).filter(
+        RoomParticipant.room_id == room_id
+    ).all()
+
+    # Extraer solo los IDs
+    excluded_user_ids = [user_id for (user_id,) in current_participants]
+
+    # Obtener todos los usuarios EXCEPTO los que ya están en la sala
+    available_users = db.query(User).filter(
+        User.id.notin_(excluded_user_ids),
+        User.is_active == True
+    ).order_by(User.username).all()
+
+    return available_users
+
 @router.get("/{user_id}", response_model=UserResponse)
 async def get_user(user_id: int, db: Session = Depends(get_db)):
     """Obtener un usuario por ID"""
