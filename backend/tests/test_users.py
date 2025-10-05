@@ -163,7 +163,7 @@ def test_delete_user_not_found(client):
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
 def test_login_success(client):
-    """Test login exitoso"""
+    """Test login exitoso con JWT"""
     client.post("/users/", json={
         "username": "testuser",
         "email": "test@example.com",
@@ -176,11 +176,19 @@ def test_login_success(client):
     })
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
-    assert data["username"] == "testuser"
-    assert "last_login" in data
+
+    # Validar estructura del token JWT
+    assert "access_token" in data
+    assert "token_type" in data
+    assert "user" in data
+    assert data["token_type"] == "bearer"
+
+    # Validar datos del usuario
+    assert data["user"]["username"] == "testuser"
+    assert "last_login" in data["user"]
 
 def test_login_with_email(client):
-    """Test login usando email en lugar de username"""
+    """Test login usando email en lugar de username con JWT"""
     client.post("/users/", json={
         "username": "testuser",
         "email": "test@example.com",
@@ -193,7 +201,10 @@ def test_login_with_email(client):
     })
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
-    assert data["email"] == "test@example.com"
+
+    # Validar JWT
+    assert "access_token" in data
+    assert data["user"]["email"] == "test@example.com"
 
 def test_login_invalid_credentials(client):
     """Test login con credenciales incorrectas"""

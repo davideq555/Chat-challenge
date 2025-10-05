@@ -36,3 +36,9 @@ class UserResponse(UserBase):
 class UserInDB(UserResponse):
     """Schema de usuario en base de datos (incluye password_hash)"""
     password_hash: str
+
+class Token(BaseModel):
+    """Schema para respuesta de autenticación"""
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse

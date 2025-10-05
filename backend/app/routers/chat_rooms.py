@@ -9,6 +9,7 @@ from app.models.chat_room import ChatRoom
 from app.models.room_participant import RoomParticipant
 from app.models.user import User
 from app.database import get_db
+from app.auth.dependencies import get_current_user
 
 router = APIRouter(
     prefix="/chat-rooms",
@@ -16,21 +17,18 @@ router = APIRouter(
 )
 
 @router.post("/", response_model=ChatRoomResponse, status_code=status.HTTP_201_CREATED)
-async def create_chat_room(room_data: ChatRoomCreate, creator_id: int, db: Session = Depends(get_db)):
+async def create_chat_room(
+    room_data: ChatRoomCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
-    Crear una nueva sala de chat
+    Crear una nueva sala de chat (requiere autenticación JWT)
 
     - **room_data**: Datos de la sala
-    - **creator_id**: ID del usuario creador (query parameter) - se agregará automáticamente como participante
-    """
-    # Verificar que el creador existe
-    creator = db.query(User).filter(User.id == creator_id).first()
-    if not creator:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Creator user not found"
-        )
 
+    El usuario autenticado será agregado automáticamente como participante
+    """
     # Crear la sala
     chat_room = ChatRoom(
         name=room_data.name,
@@ -44,7 +42,7 @@ async def create_chat_room(room_data: ChatRoomCreate, creator_id: int, db: Sessi
     # Agregar al creador como participante automáticamente
     participant = RoomParticipant(
         room_id=chat_room.id,
-        user_id=creator_id
+        user_id=current_user.id
     )
 
     db.add(participant)
@@ -67,24 +65,17 @@ async def get_chat_rooms(is_group: bool = None, db: Session = Depends(get_db)):
 
     return query.all()
 
-@router.get("/my-rooms/{user_id}", response_model=List[ChatRoomResponse])
-async def get_user_rooms(user_id: int, db: Session = Depends(get_db)):
+@router.get("/my-rooms", response_model=List[ChatRoomResponse])
+async def get_user_rooms(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
-    Obtener todas las salas donde el usuario es participante (ENDPOINT SEGURO)
-
-    - **user_id**: ID del usuario
+    Obtener todas las salas donde el usuario autenticado es participante (requiere JWT)
     """
-    # Verificar que el usuario existe
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-
     # Obtener todas las salas donde el usuario es participante
     room_ids = db.query(RoomParticipant.room_id).filter(
-        RoomParticipant.user_id == user_id
+        RoomParticipant.user_id == current_user.id
     ).all()
 
     # Extraer los IDs
@@ -96,12 +87,15 @@ async def get_user_rooms(user_id: int, db: Session = Depends(get_db)):
     return rooms
 
 @router.get("/{room_id}", response_model=ChatRoomResponse)
-async def get_chat_room(room_id: int, user_id: int, db: Session = Depends(get_db)):
+async def get_chat_room(
+    room_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
-    Obtener una sala de chat por ID (VALIDACIÓN DE ACCESO)
+    Obtener una sala de chat por ID (requiere JWT y validación de acceso)
 
     - **room_id**: ID de la sala
-    - **user_id**: ID del usuario que solicita acceso (query parameter)
     """
     # Verificar que la sala existe
     chat_room = db.query(ChatRoom).filter(ChatRoom.id == room_id).first()
@@ -114,7 +108,7 @@ async def get_chat_room(room_id: int, user_id: int, db: Session = Depends(get_db
     # Verificar que el usuario es participante de la sala
     is_participant = db.query(RoomParticipant).filter(
         RoomParticipant.room_id == room_id,
-        RoomParticipant.user_id == user_id
+        RoomParticipant.user_id == current_user.id
     ).first()
 
     if not is_participant:
@@ -126,13 +120,17 @@ async def get_chat_room(room_id: int, user_id: int, db: Session = Depends(get_db
     return chat_room
 
 @router.put("/{room_id}", response_model=ChatRoomResponse)
-async def update_chat_room(room_id: int, room_data: ChatRoomUpdate, user_id: int, db: Session = Depends(get_db)):
+async def update_chat_room(
+    room_id: int,
+    room_data: ChatRoomUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
-    Actualizar una sala de chat (VALIDACIÓN DE ACCESO)
+    Actualizar una sala de chat (requiere JWT y validación de acceso)
 
     - **room_id**: ID de la sala
     - **room_data**: Datos a actualizar
-    - **user_id**: ID del usuario que solicita la actualización (query parameter)
     """
     # Verificar que la sala existe
     chat_room = db.query(ChatRoom).filter(ChatRoom.id == room_id).first()
@@ -145,7 +143,7 @@ async def update_chat_room(room_id: int, room_data: ChatRoomUpdate, user_id: int
     # Verificar que el usuario es participante de la sala
     is_participant = db.query(RoomParticipant).filter(
         RoomParticipant.room_id == room_id,
-        RoomParticipant.user_id == user_id
+        RoomParticipant.user_id == current_user.id
     ).first()
 
     if not is_participant:
@@ -167,12 +165,15 @@ async def update_chat_room(room_id: int, room_data: ChatRoomUpdate, user_id: int
     return chat_room
 
 @router.delete("/{room_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_chat_room(room_id: int, user_id: int, db: Session = Depends(get_db)):
+async def delete_chat_room(
+    room_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
-    Eliminar una sala de chat (VALIDACIÓN DE ACCESO)
+    Eliminar una sala de chat (requiere JWT y validación de acceso)
 
     - **room_id**: ID de la sala
-    - **user_id**: ID del usuario que solicita eliminar (query parameter)
     """
     # Verificar que la sala existe
     chat_room = db.query(ChatRoom).filter(ChatRoom.id == room_id).first()
@@ -185,7 +186,7 @@ async def delete_chat_room(room_id: int, user_id: int, db: Session = Depends(get
     # Verificar que el usuario es participante de la sala
     is_participant = db.query(RoomParticipant).filter(
         RoomParticipant.room_id == room_id,
-        RoomParticipant.user_id == user_id
+        RoomParticipant.user_id == current_user.id
     ).first()
 
     if not is_participant:
@@ -200,12 +201,19 @@ async def delete_chat_room(room_id: int, user_id: int, db: Session = Depends(get
 # --- ENDPOINTS DE GESTIÓN DE PARTICIPANTES ---
 
 @router.post("/{room_id}/participants", response_model=RoomParticipantResponse, status_code=status.HTTP_201_CREATED)
-async def add_participant(room_id: int, user_id: int, db: Session = Depends(get_db)):
+async def add_participant(
+    room_id: int,
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
-    Agregar un participante a una sala
+    Agregar un participante a una sala (requiere JWT)
 
     - **room_id**: ID de la sala
     - **user_id**: ID del usuario a agregar (query parameter)
+
+    Solo los participantes actuales de una sala pueden agregar nuevos participantes
     """
     # Verificar que la sala existe
     chat_room = db.query(ChatRoom).filter(ChatRoom.id == room_id).first()
@@ -215,7 +223,19 @@ async def add_participant(room_id: int, user_id: int, db: Session = Depends(get_
             detail="Chat room not found"
         )
 
-    # Verificar que el usuario existe
+    # Verificar que el usuario autenticado es participante de la sala
+    is_participant = db.query(RoomParticipant).filter(
+        RoomParticipant.room_id == room_id,
+        RoomParticipant.user_id == current_user.id
+    ).first()
+
+    if not is_participant:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a participant of this chat room"
+        )
+
+    # Verificar que el usuario a agregar existe
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(
@@ -248,13 +268,33 @@ async def add_participant(room_id: int, user_id: int, db: Session = Depends(get_
     return participant
 
 @router.delete("/{room_id}/participants/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_participant(room_id: int, user_id: int, db: Session = Depends(get_db)):
+async def remove_participant(
+    room_id: int,
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
-    Remover un participante de una sala
+    Remover un participante de una sala (requiere JWT)
 
     - **room_id**: ID de la sala
     - **user_id**: ID del usuario a remover
+
+    Solo los participantes de una sala pueden remover participantes (incluido a sí mismos)
     """
+    # Verificar que el usuario autenticado es participante de la sala
+    is_participant = db.query(RoomParticipant).filter(
+        RoomParticipant.room_id == room_id,
+        RoomParticipant.user_id == current_user.id
+    ).first()
+
+    if not is_participant:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a participant of this chat room"
+        )
+
+    # Buscar al participante a remover
     participant = db.query(RoomParticipant).filter(
         RoomParticipant.room_id == room_id,
         RoomParticipant.user_id == user_id
@@ -270,11 +310,17 @@ async def remove_participant(room_id: int, user_id: int, db: Session = Depends(g
     db.commit()
 
 @router.get("/{room_id}/participants", response_model=List[RoomParticipantResponse])
-async def get_room_participants(room_id: int, db: Session = Depends(get_db)):
+async def get_room_participants(
+    room_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
-    Obtener todos los participantes de una sala
+    Obtener todos los participantes de una sala (requiere JWT)
 
     - **room_id**: ID de la sala
+
+    Solo los participantes de una sala pueden ver la lista de participantes
     """
     # Verificar que la sala existe
     chat_room = db.query(ChatRoom).filter(ChatRoom.id == room_id).first()
@@ -282,6 +328,18 @@ async def get_room_participants(room_id: int, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Chat room not found"
+        )
+
+    # Verificar que el usuario autenticado es participante de la sala
+    is_participant = db.query(RoomParticipant).filter(
+        RoomParticipant.room_id == room_id,
+        RoomParticipant.user_id == current_user.id
+    ).first()
+
+    if not is_participant:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a participant of this chat room"
         )
 
     participants = db.query(RoomParticipant).filter(

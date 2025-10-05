@@ -3,21 +3,17 @@ Servicio de inicialización de datos
 Crea usuarios y salas por defecto al iniciar la aplicación
 """
 
-import hashlib
 import logging
+import os
 from sqlalchemy.orm import Session
 
 from app.models.user import User
 from app.models.chat_room import ChatRoom
 from app.models.room_participant import RoomParticipant
 from app.database import SessionLocal
+from app.auth.password import hash_password
 
 logger = logging.getLogger(__name__)
-
-
-def hash_password(password: str) -> str:
-    """Hash simple de password (mismo método que en users.py)"""
-    return hashlib.sha256(password.encode()).hexdigest()
 
 
 def init_default_data():
@@ -27,6 +23,11 @@ def init_default_data():
     - Usuario de prueba
     - Sala de bienvenida
     """
+    # No inicializar datos en modo test
+    if os.getenv("TESTING") == "1":
+        logger.info("⏩ Modo test detectado, saltando inicialización de datos por defecto")
+        return
+
     db: Session = SessionLocal()
 
     try:

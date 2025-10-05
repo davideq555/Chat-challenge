@@ -7,9 +7,13 @@ class MessageBase(BaseModel):
     content: str = Field(..., min_length=1, description="Contenido del mensaje")
 
 class MessageCreate(MessageBase):
-    """Schema para crear un mensaje"""
+    """Schema para crear un mensaje (usado internamente)"""
     room_id: int = Field(..., gt=0, description="ID de la sala de chat")
     user_id: int = Field(..., gt=0, description="ID del usuario autor")
+
+class MessageCreateRequest(MessageBase):
+    """Schema para crear un mensaje con JWT (no incluye user_id, se obtiene del token)"""
+    room_id: int = Field(..., gt=0, description="ID de la sala de chat")
 
 class MessageUpdate(BaseModel):
     """Schema para actualizar un mensaje (solo contenido)"""

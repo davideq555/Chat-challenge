@@ -1,22 +1,20 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from typing import List
 from datetime import datetime
-import hashlib
 from sqlalchemy.orm import Session
 
-from app.schemas.user import UserCreate, UserUpdate, UserLogin, UserResponse
+from app.schemas.user import UserCreate, UserUpdate, UserLogin, UserResponse, Token
 from app.models.user import User
 from app.database import get_db
 from app.services.user_online import user_online_service
+from app.auth.password import hash_password, verify_password
+from app.auth.jwt import create_access_token
+from app.auth.dependencies import get_current_user
 
 router = APIRouter(
     prefix="/users",
     tags=["users"]
 )
-
-def hash_password(password: str) -> str:
-    """Hash simple de contraseña (usar bcrypt en producción)"""
-    return hashlib.sha256(password.encode()).hexdigest()
 
 @router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(user_data: UserCreate, db: Session = Depends(get_db)):
@@ -100,6 +98,7 @@ async def update_user(user_id: int, user_data: UserUpdate, db: Session = Depends
         user.email = user_data.email
 
     if user_data.password is not None:
+        # Usar bcrypt para hashear la nueva contraseña
         user.password_hash = hash_password(user_data.password)
 
     if user_data.is_active is not None:
@@ -122,9 +121,18 @@ async def delete_user(user_id: int, db: Session = Depends(get_db)):
     db.delete(user)
     db.commit()
 
-@router.post("/login", response_model=UserResponse)
+@router.post("/login", response_model=Token)
 async def login(credentials: UserLogin, db: Session = Depends(get_db)):
-    """Autenticar un usuario"""
+    """
+    Autenticar un usuario y retornar un token JWT
+
+    Args:
+        credentials: Username/email y contraseña
+        db: Sesión de base de datos
+
+    Returns:
+        Token JWT y datos del usuario
+    """
     # Buscar por username o email
     user = db.query(User).filter(
         (User.username == credentials.username) | (User.email == credentials.username)
@@ -136,8 +144,8 @@ async def login(credentials: UserLogin, db: Session = Depends(get_db)):
             detail="Invalid credentials"
         )
 
-    # Verificar contraseña
-    if user.password_hash != hash_password(credentials.password):
+    # Verificar contraseña con bcrypt
+    if not verify_password(credentials.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials"
@@ -155,7 +163,16 @@ async def login(credentials: UserLogin, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
 
-    return user
+    # Crear token JWT
+    access_token = create_access_token(
+        data={"sub": user.id, "username": user.username}
+    )
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": user
+    }
 
 @router.get("/online", response_model=List[int])
 async def get_online_users():
