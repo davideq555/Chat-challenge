@@ -15,6 +15,7 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, nullable=False)
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_public: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     def to_dict(self):
         return {
@@ -23,5 +24,6 @@ class User(Base):
             "email": self.email,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "last_login": self.last_login.isoformat() if self.last_login else None,
-            "is_active": self.is_active
+            "is_active": self.is_active,
+            "is_public": self.is_public
         }

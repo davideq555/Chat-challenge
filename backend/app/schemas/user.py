@@ -17,6 +17,7 @@ class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     password: Optional[str] = Field(None, min_length=8)
     is_active: Optional[bool] = None
+    is_public: Optional[bool] = None
 
 class UserLogin(BaseModel):
     """Schema para login"""
@@ -29,6 +30,7 @@ class UserResponse(UserBase):
     created_at: datetime
     last_login: Optional[datetime] = None
     is_active: bool
+    is_public: bool
 
     class Config:
         from_attributes = True

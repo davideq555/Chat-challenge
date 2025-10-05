@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from app.routers import users, chat_rooms, messages, attachments, websocket
+from app.routers import users, chat_rooms, messages, attachments, websocket, contacts
 from app.database import get_db
 from app.redis_client import redis_client
 from app.services.message_cache import message_cache
@@ -32,6 +32,7 @@ app.include_router(users.router)
 app.include_router(chat_rooms.router)
 app.include_router(messages.router)
 app.include_router(attachments.router)
+app.include_router(contacts.router)
 app.include_router(websocket.router)  # WebSocket router
 
 # Evento de inicio: crear datos por defecto

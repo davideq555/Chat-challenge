@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.models.user import User
 from app.models.chat_room import ChatRoom
 from app.models.room_participant import RoomParticipant
+from app.models.contact import Contact
 from app.database import SessionLocal
 from app.auth.password import hash_password
 
@@ -40,7 +41,8 @@ def init_default_data():
             bot_user = User(
                 username="WelcomeBot",
                 email="bot@chatapp.com",
-                password_hash=hash_password("bot_password_secret_2025")
+                password_hash=hash_password("bot_password_secret_2025"),
+                is_public=True
             )
             db.add(bot_user)
             db.commit()
@@ -55,7 +57,8 @@ def init_default_data():
             test_user = User(
                 username="TestUser",
                 email="test@example.com",
-                password_hash=hash_password("pass1234")
+                password_hash=hash_password("pass1234"),
+                is_public=True
             )
             db.add(test_user)
             db.commit()
@@ -70,7 +73,8 @@ def init_default_data():
             test_user2 = User(
                 username="TestUser2",
                 email="test2@example.com",
-                password_hash=hash_password("pass1234")
+                password_hash=hash_password("pass1234"),
+                is_public=True
             )
             db.add(test_user2)
             db.commit()
@@ -138,6 +142,22 @@ def init_default_data():
             logger.info("✅ TestUser2 agregado como participante de la sala de bienvenida")
         else:
             logger.info("ℹ️  TestUser2 ya es participante de la sala de bienvenida")
+
+        # 5. Crear contacto pendiente entre TestUser y TestUser2
+        contact_1_to_2 = db.query(Contact).filter(
+            Contact.user_id == test_user.id,
+            Contact.contact_id == test_user2.id
+        ).first()
+        if not contact_1_to_2:
+            contact_1_to_2 = Contact(
+                user_id=test_user.id,
+                contact_id=test_user2.id,
+                status="pending"
+            )
+            db.add(contact_1_to_2)
+            logger.info("✅ Solicitud de contacto creada: TestUser → TestUser2 (pending)")
+        else:
+            logger.info("ℹ️  Solicitud de contacto ya existe: TestUser → TestUser2")
 
         db.commit()
 
