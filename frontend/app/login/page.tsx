@@ -1,11 +1,21 @@
-import { MessageSquare } from "lucide-react"
+import { MessageSquare, ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { LoginForm } from "@/components/auth/login-form"
+import { Button } from "@/components/ui/button"
 
 export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <div className="absolute top-4 left-4">
+        <Link href="/">
+          <Button variant="ghost" size="sm" className="gap-2">
+            <ArrowLeft className="h-4 w-4" />
+            Volver al inicio
+          </Button>
+        </Link>
+      </div>
+
       <div className="absolute top-4 right-4">
         <ThemeToggle />
       </div>

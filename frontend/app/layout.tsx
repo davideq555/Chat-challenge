@@ -11,7 +11,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "ChatApp - Mensajería en Tiempo Real",
-  description: "Aplicación de chat en tiempo real con soporte para archivos y temas",
+  description: "Aplicación de chat en tiempo real con soporte para archivos e imágenes.",
     generator: 'v0.app'
 }
 

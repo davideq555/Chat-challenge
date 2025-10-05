@@ -61,7 +61,7 @@ export function RegisterForm() {
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="username">Nombre de Usuario</Label>
+            <Label htmlFor="username">Username</Label>
             <Input
               id="username"
               type="text"
