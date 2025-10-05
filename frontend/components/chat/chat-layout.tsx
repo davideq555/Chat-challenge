@@ -48,7 +48,20 @@ export function ChatLayout() {
 
     switch (message.type) {
       case "message":
-        handleNewMessage(message.data)
+        // Transform backend message to frontend format
+        const msgData = message.data
+        if (msgData) {
+          const transformedMessage: Message = {
+            id: msgData.id?.toString() || Date.now().toString(),
+            content: msgData.content || "",
+            senderId: msgData.user_id?.toString() || "",
+            receiverId: "", // Not needed for sidebar update
+            roomId: msgData.room_id?.toString() || "",
+            timestamp: msgData.created_at || new Date().toISOString(),
+            type: "text",
+          }
+          handleNewMessage(transformedMessage)
+        }
         break
       case "online":
         setOnlineUsers((prev) => new Set(prev).add(message.data.userId))
@@ -69,14 +82,14 @@ export function ChatLayout() {
   })
 
   const handleNewMessage = (newMessage: Message) => {
-    // Update conversations with new message
+    // Update conversations with new message (match by roomId)
     setConversations((prev) =>
       prev.map((conv) => {
-        if (conv.user.id === newMessage.senderId || conv.user.id === newMessage.receiverId) {
+        if (conv.id === newMessage.roomId) {
           return {
             ...conv,
             lastMessage: newMessage,
-            unreadCount: newMessage.senderId !== currentUser?.id ? conv.unreadCount + 1 : conv.unreadCount,
+            unreadCount: newMessage.senderId !== currentUser?.id.toString() ? conv.unreadCount + 1 : conv.unreadCount,
           }
         }
         return conv
@@ -155,8 +168,14 @@ export function ChatLayout() {
   useEffect(() => {
     loadConversations()
 
+    // Refresh conversations every 10 seconds to catch new conversations
+    const refreshInterval = setInterval(() => {
+      loadConversations()
+    }, 10000) // 10 seconds
+
     return () => {
       websocketService.disconnect()
+      clearInterval(refreshInterval)
     }
   }, [router])
 
