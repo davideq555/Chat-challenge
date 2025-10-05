@@ -20,8 +20,9 @@ def init_default_data():
     """
     Inicializar datos por defecto:
     - Usuario bot de bienvenida
-    - Usuario de prueba
-    - Sala de bienvenida
+    - Usuario de prueba (TestUser)
+    - Segundo usuario de prueba (TestUser2)
+    - Sala de bienvenida (con todos los usuarios como participantes)
     """
     # No inicializar datos en modo test
     if os.getenv("TESTING") == "1":
@@ -62,6 +63,21 @@ def init_default_data():
             logger.info(f"✅ Usuario de prueba creado: {test_user.username} (ID: {test_user.id})")
         else:
             logger.info(f"ℹ️  Usuario de prueba ya existe: {test_user.username} (ID: {test_user.id})")
+
+        # 2b. Crear segundo usuario de prueba
+        test_user2 = db.query(User).filter(User.username == "TestUser2").first()
+        if not test_user2:
+            test_user2 = User(
+                username="TestUser2",
+                email="test2@example.com",
+                password_hash=hash_password("pass1234")
+            )
+            db.add(test_user2)
+            db.commit()
+            db.refresh(test_user2)
+            logger.info(f"✅ Segundo usuario de prueba creado: {test_user2.username} (ID: {test_user2.id})")
+        else:
+            logger.info(f"ℹ️  Segundo usuario de prueba ya existe: {test_user2.username} (ID: {test_user2.id})")
 
         # 3. Crear sala de bienvenida
         welcome_room = db.query(ChatRoom).filter(ChatRoom.name == "Bienvenida").first()
@@ -108,10 +124,25 @@ def init_default_data():
         else:
             logger.info("ℹ️  TestUser ya es participante de la sala de bienvenida")
 
+        # Agregar test user 2
+        test_participant2 = db.query(RoomParticipant).filter(
+            RoomParticipant.room_id == welcome_room.id,
+            RoomParticipant.user_id == test_user2.id
+        ).first()
+        if not test_participant2:
+            test_participant2 = RoomParticipant(
+                room_id=welcome_room.id,
+                user_id=test_user2.id
+            )
+            db.add(test_participant2)
+            logger.info("✅ TestUser2 agregado como participante de la sala de bienvenida")
+        else:
+            logger.info("ℹ️  TestUser2 ya es participante de la sala de bienvenida")
+
         db.commit()
 
         logger.info("✅ Datos por defecto inicializados correctamente")
-        logger.info(f"   Bot ID: {bot_user.id}, User ID: {test_user.id}, Room ID: {welcome_room.id}")
+        logger.info(f"   Bot ID: {bot_user.id}, TestUser ID: {test_user.id}, TestUser2 ID: {test_user2.id}, Room ID: {welcome_room.id}")
 
     except Exception as e:
         logger.error(f"❌ Error inicializando datos por defecto: {e}", exc_info=True)

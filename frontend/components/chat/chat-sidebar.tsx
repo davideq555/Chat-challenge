@@ -6,12 +6,14 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { ConversationItem } from "./conversation-item"
+import { NewConversationDialog } from "./new-conversation-dialog"
 import type { Conversation, User } from "./chat-layout"
 
 type ChatSidebarProps = {
   conversations: Conversation[]
   selectedConversation: Conversation | null
   onSelectConversation: (conversation: Conversation) => void
+  onConversationCreated: () => void
   currentUser: User
 }
 
@@ -19,9 +21,11 @@ export function ChatSidebar({
   conversations,
   selectedConversation,
   onSelectConversation,
+  onConversationCreated,
   currentUser,
 }: ChatSidebarProps) {
   const [searchQuery, setSearchQuery] = useState("")
+  const [newConversationOpen, setNewConversationOpen] = useState(false)
 
   const filteredConversations = conversations.filter((conv) =>
     conv.user.username.toLowerCase().includes(searchQuery.toLowerCase()),
@@ -41,7 +45,12 @@ export function ChatSidebar({
               className="pl-9"
             />
           </div>
-          <Button size="icon" variant="ghost" title="Nueva conversación">
+          <Button
+            size="icon"
+            variant="ghost"
+            title="Nueva conversación"
+            onClick={() => setNewConversationOpen(true)}
+          >
             <Plus className="h-5 w-5" />
           </Button>
         </div>
@@ -65,6 +74,13 @@ export function ChatSidebar({
           )}
         </div>
       </ScrollArea>
+
+      {/* New Conversation Dialog */}
+      <NewConversationDialog
+        open={newConversationOpen}
+        onOpenChange={setNewConversationOpen}
+        onConversationCreated={onConversationCreated}
+      />
     </div>
   )
 }

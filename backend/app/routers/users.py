@@ -55,6 +55,48 @@ async def get_users(db: Session = Depends(get_db)):
     users = db.query(User).all()
     return users
 
+@router.get("/available-for-chat", response_model=List[UserResponse])
+async def get_available_users_for_chat(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Obtener usuarios disponibles para iniciar una conversación (requiere JWT)
+
+    Retorna usuarios con los que el usuario actual NO tiene conversaciones 1-to-1 activas
+    y excluye al usuario actual.
+
+    Returns:
+        Lista de usuarios disponibles para chatear
+    """
+    from app.models.chat_room import ChatRoom
+    from app.models.room_participant import RoomParticipant
+
+    # Obtener todas las rooms 1-to-1 donde el usuario actual es participante
+    user_rooms_1to1 = db.query(ChatRoom.id).join(RoomParticipant).filter(
+        ChatRoom.is_group == False,
+        RoomParticipant.user_id == current_user.id
+    ).subquery()
+
+    # Obtener IDs de usuarios con los que ya tiene conversaciones 1-to-1
+    users_with_conversations = db.query(RoomParticipant.user_id).filter(
+        RoomParticipant.room_id.in_(user_rooms_1to1),
+        RoomParticipant.user_id != current_user.id
+    ).distinct().all()
+
+    # Extraer solo los IDs
+    excluded_user_ids = [user_id for (user_id,) in users_with_conversations]
+    # Agregar el ID del usuario actual
+    excluded_user_ids.append(current_user.id)
+
+    # Obtener todos los usuarios EXCEPTO los excluidos
+    available_users = db.query(User).filter(
+        User.id.notin_(excluded_user_ids),
+        User.is_active == True
+    ).order_by(User.username).all()
+
+    return available_users
+
 @router.get("/{user_id}", response_model=UserResponse)
 async def get_user(user_id: int, db: Session = Depends(get_db)):
     """Obtener un usuario por ID"""

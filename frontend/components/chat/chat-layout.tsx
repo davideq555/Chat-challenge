@@ -102,57 +102,57 @@ export function ChatLayout() {
     )
   }
 
-  useEffect(() => {
-    const loadConversations = async () => {
-      // Verificar autenticación
-      const token = localStorage.getItem("token")
-      const userStr = localStorage.getItem("user")
+  const loadConversations = async () => {
+    // Verificar autenticación
+    const token = localStorage.getItem("token")
+    const userStr = localStorage.getItem("user")
 
-      if (!token || !userStr) {
-        router.push("/login")
-        return
-      }
-
-      const user = JSON.parse(userStr)
-      setCurrentUser(user)
-
-      try {
-        // Cargar conversaciones reales desde el backend
-        const backendConversations = await apiClient.loadUserConversations()
-
-        // Transformar al formato del frontend
-        const transformedConversations: Conversation[] = backendConversations
-          .filter((conv: any) => conv.otherParticipant) // Solo mostrar salas con otro participante
-          .map((conv: any) => {
-            const lastMsg = conv.lastMessage
-
-            return {
-              id: conv.room.id.toString(),
-              user: {
-                id: conv.otherParticipant.user.id.toString(),
-                username: conv.otherParticipant.user.username,
-                email: conv.otherParticipant.user.email,
-                isOnline: false, // TODO: Implementar estado online con WebSocket
-              },
-              lastMessage: lastMsg ? {
-                id: lastMsg.id.toString(),
-                content: lastMsg.content,
-                senderId: lastMsg.user_id.toString(),
-                receiverId: conv.otherParticipant.user.id.toString(),
-                timestamp: lastMsg.created_at,
-                type: "text",
-              } : undefined,
-              unreadCount: 0, // TODO: Implementar contador de no leídos
-            }
-          })
-
-        setConversations(transformedConversations)
-      } catch (error) {
-        console.error("Error loading conversations:", error)
-        setConversations([])
-      }
+    if (!token || !userStr) {
+      router.push("/login")
+      return
     }
 
+    const user = JSON.parse(userStr)
+    setCurrentUser(user)
+
+    try {
+      // Cargar conversaciones reales desde el backend
+      const backendConversations = await apiClient.loadUserConversations()
+
+      // Transformar al formato del frontend
+      const transformedConversations: Conversation[] = backendConversations
+        .filter((conv: any) => conv.otherParticipant) // Solo mostrar salas con otro participante
+        .map((conv: any) => {
+          const lastMsg = conv.lastMessage
+
+          return {
+            id: conv.room.id.toString(),
+            user: {
+              id: conv.otherParticipant.user.id.toString(),
+              username: conv.otherParticipant.user.username,
+              email: conv.otherParticipant.user.email,
+              isOnline: false, // TODO: Implementar estado online con WebSocket
+            },
+            lastMessage: lastMsg ? {
+              id: lastMsg.id.toString(),
+              content: lastMsg.content,
+              senderId: lastMsg.user_id.toString(),
+              receiverId: conv.otherParticipant.user.id.toString(),
+              timestamp: lastMsg.created_at,
+              type: "text",
+            } : undefined,
+            unreadCount: 0, // TODO: Implementar contador de no leídos
+          }
+        })
+
+      setConversations(transformedConversations)
+    } catch (error) {
+      console.error("Error loading conversations:", error)
+      setConversations([])
+    }
+  }
+
+  useEffect(() => {
     loadConversations()
 
     return () => {
@@ -176,6 +176,7 @@ export function ChatLayout() {
           conversations={conversations}
           selectedConversation={selectedConversation}
           onSelectConversation={setSelectedConversation}
+          onConversationCreated={loadConversations}
           currentUser={currentUser}
         />
         <ChatWindow selectedConversation={selectedConversation} currentUser={currentUser} />
