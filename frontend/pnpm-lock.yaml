@@ -113,6 +113,9 @@ importers:
       embla-carousel-react:
         specifier: 8.5.1
         version: 8.5.1(react@19.0.0)
+      emoji-picker-react:
+        specifier: ^4.12.0
+        version: 4.14.0(react@19.0.0)
       fs:
         specifier: latest
         version: 0.0.1-security
@@ -1575,6 +1578,12 @@ packages:
   embla-carousel@8.5.1:
     resolution: {integrity: sha512-JUb5+FOHobSiWQ2EJNaueCNT/cQU9L6XWBbWmorWPQT9bkbk+fhsuLr8wWrzXKagO3oWszBO7MSx+GfaRk4E6A==}
 
+  emoji-picker-react@4.14.0:
+    resolution: {integrity: sha512-HYqNhvbhYWonp/ArIDcbElTlwPHC3g59CVPDVPt5DgfOOKIyabKIucVODBslul3+5r+rnmH22LrTk0SlWiqRfg==}
+    engines: {node: '>=10'}
+    peerDependencies:
+      react: '>=16'
+
   enhanced-resolve@5.18.3:
     resolution: {integrity: sha512-d4lC8xfavMeBjzGr2vECC3fsGXziXZQyJxD868h2M/mBI3PwAuODxAkLkq5HYuvrPYcUtiLzsTo8U3PgX3Ocww==}
     engines: {node: '>=10.13.0'}
@@ -1589,6 +1598,9 @@ packages:
   fast-equals@5.3.2:
     resolution: {integrity: sha512-6rxyATwPCkaFIL3JLqw8qXqMpIZ942pTX/tbQFkRsDGblS8tNGtlUauA/+mt6RUfqn/4MoEr+WDkYoIQbibWuQ==}
     engines: {node: '>=6.0.0'}
+
+  flairup@1.0.0:
+    resolution: {integrity: sha512-IKlE+pNvL2R+kVL1kEhUYqRxVqeFnjiIvHWDMLFXNaqyUdFXQM2wte44EfMYJNHkW16X991t2Zg8apKkhv7OBA==}
 
   fraction.js@4.3.7:
     resolution: {integrity: sha512-ZsDfxO51wGAXREY55a7la9LScWpwv9RxIrYABrlvOFBlH/ShPnrtsXeuUIfXKKOVicNxQ+o8JTbJvjS4M89yew==}
@@ -3335,6 +3347,11 @@ snapshots:
 
   embla-carousel@8.5.1: {}
 
+  emoji-picker-react@4.14.0(react@19.0.0):
+    dependencies:
+      flairup: 1.0.0
+      react: 19.0.0
+
   enhanced-resolve@5.18.3:
     dependencies:
       graceful-fs: 4.2.11
@@ -3345,6 +3362,8 @@ snapshots:
   eventemitter3@4.0.7: {}
 
   fast-equals@5.3.2: {}
+
+  flairup@1.0.0: {}
 
   fraction.js@4.3.7: {}
 

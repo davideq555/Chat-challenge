@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Send, Paperclip, ImageIcon, File, Smile, MoreVertical } from "lucide-react"
 import { MessageBubble } from "./message-bubble"
 import { FileUploadDialog } from "./file-upload-dialog"
@@ -14,6 +15,10 @@ import type { Conversation, User, Message } from "./chat-layout"
 import { websocketService } from "@/lib/websocket"
 import { useWebSocket } from "@/hooks/use-websocket"
 import { apiClient } from "@/lib/api"
+import dynamic from "next/dynamic"
+
+// Import EmojiPicker dynamically to avoid SSR issues
+const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false })
 
 type ChatWindowProps = {
   selectedConversation: Conversation | null
@@ -26,6 +31,7 @@ export function ChatWindow({ selectedConversation, currentUser }: ChatWindowProp
   const [isTyping, setIsTyping] = useState(false)
   const [fileDialogOpen, setFileDialogOpen] = useState(false)
   const [uploadType, setUploadType] = useState<"image" | "document">("image")
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const typingTimeoutRef = useRef<NodeJS.Timeout>()
 
@@ -211,6 +217,12 @@ export function ChatWindow({ selectedConversation, currentUser }: ChatWindowProp
     setFileDialogOpen(true)
   }
 
+  const handleEmojiClick = (emojiData: any) => {
+    // Insert emoji at cursor position
+    setMessageInput((prev) => prev + emojiData.emoji)
+    setEmojiPickerOpen(false)
+  }
+
   const getInitials = (username: string) => {
     // Si el username tiene espacios, tomar iniciales de cada palabra
     // Si no, tomar las primeras 2 letras
@@ -295,9 +307,21 @@ export function ChatWindow({ selectedConversation, currentUser }: ChatWindowProp
               onKeyPress={handleKeyPress}
               className="pr-10"
             />
-            <Button variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2" title="Emoji">
-              <Smile className="h-5 w-5" />
-            </Button>
+            <Popover open={emojiPickerOpen} onOpenChange={setEmojiPickerOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-1 top-1/2 -translate-y-1/2"
+                  title="Emoji"
+                >
+                  <Smile className="h-5 w-5" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-full p-0 border-0" side="top" align="end">
+                <EmojiPicker onEmojiClick={handleEmojiClick} width={350} height={400} />
+              </PopoverContent>
+            </Popover>
           </div>
 
           <Button onClick={handleSendMessage} size="icon" disabled={!messageInput.trim()}>
