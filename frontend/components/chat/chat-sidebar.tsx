@@ -32,7 +32,7 @@ export function ChatSidebar({
   )
 
   return (
-    <div className="w-full md:w-96 border-r border-border bg-card flex flex-col">
+    <div className={`w-full md:w-96 border-r border-border bg-card flex flex-col ${selectedConversation ? 'hidden md:flex' : 'flex'}`}>
       {/* Search Bar */}
       <div className="p-4 space-y-3">
         <div className="flex items-center gap-2">

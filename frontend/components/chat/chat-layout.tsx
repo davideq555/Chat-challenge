@@ -179,7 +179,11 @@ export function ChatLayout() {
           onConversationCreated={loadConversations}
           currentUser={currentUser}
         />
-        <ChatWindow selectedConversation={selectedConversation} currentUser={currentUser} />
+        <ChatWindow
+          selectedConversation={selectedConversation}
+          currentUser={currentUser}
+          onBack={() => setSelectedConversation(null)}
+        />
       </div>
     </div>
   )

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Send, Paperclip, ImageIcon, File, Smile, MoreVertical } from "lucide-react"
+import { Send, Paperclip, ImageIcon, File, Smile, MoreVertical, ArrowLeft } from "lucide-react"
 import { MessageBubble } from "./message-bubble"
 import { FileUploadDialog } from "./file-upload-dialog"
 import type { Conversation, User, Message } from "./chat-layout"
@@ -23,9 +23,10 @@ const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false })
 type ChatWindowProps = {
   selectedConversation: Conversation | null
   currentUser: User
+  onBack?: () => void
 }
 
-export function ChatWindow({ selectedConversation, currentUser }: ChatWindowProps) {
+export function ChatWindow({ selectedConversation, currentUser, onBack }: ChatWindowProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [messageInput, setMessageInput] = useState("")
   const [isTyping, setIsTyping] = useState(false)
@@ -239,7 +240,7 @@ export function ChatWindow({ selectedConversation, currentUser }: ChatWindowProp
 
   if (!selectedConversation) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-[var(--chat-bg)]">
+      <div className="hidden md:flex flex-1 items-center justify-center bg-[var(--chat-bg)]">
         <div className="text-center space-y-3">
           <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
             <Send className="h-10 w-10 text-primary" />
@@ -258,6 +259,17 @@ export function ChatWindow({ selectedConversation, currentUser }: ChatWindowProp
       {/* Chat Header */}
       <div className="shrink-0 h-16 border-b border-border bg-card flex items-center justify-between px-4">
         <div className="flex items-center gap-3">
+          {/* Back button - only visible on mobile */}
+          {onBack && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="md:hidden"
+              onClick={onBack}
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+          )}
           <div className="relative">
             <Avatar>
               <AvatarFallback className="bg-primary/10 text-primary">{getInitials(user.username)}</AvatarFallback>
