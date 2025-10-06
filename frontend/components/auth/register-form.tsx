@@ -24,6 +24,16 @@ export function RegisterForm() {
     confirmPassword: "",
   })
 
+  const isValidUsername = (username: string) => {
+    // No spaces and all lowercase, at least 3 chars
+    return /^[a-z0-9_]{3,}$/.test(username)
+  }
+
+  const isValidPassword = (password: string) => {
+    // At least 8 chars and contains at least one digit
+    return /^(?=.*\d).{8,}$/.test(password)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
@@ -67,11 +77,14 @@ export function RegisterForm() {
               type="text"
               placeholder="juanperez"
               value={formData.username}
-              onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+              onChange={(e) => setFormData({ ...formData, username: e.target.value.toLowerCase() })}
               required
               minLength={3}
               disabled={loading}
             />
+            {!isValidUsername(formData.username) && formData.username.length > 0 && (
+              <p className="text-sm text-destructive mt-1">El username debe ser minúsculas, sin espacios y al menos 3 caracteres (a-z, 0-9 o _).</p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -91,15 +104,15 @@ export function RegisterForm() {
             <Label htmlFor="password">Contraseña</Label>
             <div className="relative">
               <Input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                placeholder="••••••••"
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                required
-                minLength={6}
-                disabled={loading}
-              />
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  required
+                  minLength={8}
+                  disabled={loading}
+                />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
@@ -108,6 +121,9 @@ export function RegisterForm() {
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
+            {!isValidPassword(formData.password) && formData.password.length > 0 && (
+              <p className="text-sm text-destructive mt-1">La contraseña debe tener al menos 8 caracteres e incluir al menos un número.</p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -133,7 +149,16 @@ export function RegisterForm() {
             </div>
           </div>
 
-          <Button type="submit" className="w-full" disabled={loading}>
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={
+              loading ||
+              !isValidUsername(formData.username) ||
+              !isValidPassword(formData.password) ||
+              formData.password !== formData.confirmPassword
+            }
+          >
             {loading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

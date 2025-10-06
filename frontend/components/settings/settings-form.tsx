@@ -28,6 +28,12 @@ export function SettingsForm() {
     confirmPassword: "",
   })
 
+  const isValidPassword = (pw: string) => {
+    if (!pw) return false
+    // at least 8 chars and at least one digit
+    return /^(?=.*\d).{8,}$/.test(pw)
+  }
+
   useEffect(() => {
     const user = apiClient.getStoredUser()
     if (user) {
@@ -46,8 +52,8 @@ export function SettingsForm() {
       return
     }
 
-    if (passwordData.newPassword.length < 8) {
-      setPasswordError("La contraseña debe tener al menos 8 caracteres")
+    if (!isValidPassword(passwordData.newPassword)) {
+      setPasswordError("La contraseña debe tener al menos 8 caracteres e incluir al menos un número")
       return
     }
 
@@ -186,6 +192,9 @@ export function SettingsForm() {
                   {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+              {!isValidPassword(passwordData.newPassword) && passwordData.newPassword.length > 0 && (
+                <p className="text-sm text-destructive mt-1">La contraseña debe tener al menos 8 caracteres e incluir al menos un número.</p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -209,9 +218,21 @@ export function SettingsForm() {
                   {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+              {passwordData.confirmPassword.length > 0 && passwordData.newPassword !== passwordData.confirmPassword && (
+                <p className="text-sm text-destructive mt-1">Las contraseñas no coinciden.</p>
+              )}
             </div>
 
-            <Button type="submit" className="w-full" disabled={loadingPassword || passwordSuccess}>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={
+                loadingPassword ||
+                passwordSuccess ||
+                !isValidPassword(passwordData.newPassword) ||
+                passwordData.newPassword !== passwordData.confirmPassword
+              }
+            >
               {loadingPassword ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
