@@ -22,7 +22,7 @@ export function FileUploadDialog({
   open,
   onOpenChange,
   onUpload,
-  acceptedTypes = "image/*,application/pdf,.doc,.docx,.txt",
+  acceptedTypes = "image/jpeg,image/png,application/pdf,.doc,.docx",
   maxSize = 10 * 1024 * 1024, // 10MB
 }: FileUploadDialogProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)

@@ -145,6 +145,12 @@ class ApiClient {
     })
   }
 
+  async deleteChatRoom(roomId: number) {
+    return this.request<void>(`/chat-rooms/${roomId}`, {
+      method: 'DELETE',
+    })
+  }
+
   // Room Participants
   async addParticipant(roomId: number, userId: number) {
     return this.request<any>(`/chat-rooms/${roomId}/participants?user_id=${userId}`, {
@@ -179,6 +185,13 @@ class ApiClient {
     return this.request<any>('/messages/', {
       method: 'POST',
       body: JSON.stringify(body),
+    })
+  }
+
+  async updateMessage(messageId: number, content: string) {
+    return this.request<any>(`/messages/${messageId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ content }),
     })
   }
 

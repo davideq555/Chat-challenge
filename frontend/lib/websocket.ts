@@ -3,8 +3,10 @@
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000'
 
 type WebSocketMessage = {
-  type: "message" | "typing" | "online" | "offline" | "join_room" | "leave_room"
-  data: any
+  type: "message" | "typing" | "online" | "offline" | "join_room" | "leave_room" | "message_updated" | "message_deleted"
+  data?: any
+  content?: string
+  messageId?: string
 }
 
 type WebSocketCallback = (message: WebSocketMessage) => void

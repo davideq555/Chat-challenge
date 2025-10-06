@@ -7,6 +7,8 @@ from app.schemas.chat_room import ChatRoomCreate, ChatRoomUpdate, ChatRoomRespon
 from app.schemas.room_participant import RoomParticipantCreate, RoomParticipantResponse
 from app.models.chat_room import ChatRoom
 from app.models.room_participant import RoomParticipant
+from app.models.message import Message
+from app.models.attachment import Attachment
 from app.models.user import User
 from app.database import get_db
 from app.auth.dependencies import get_current_user
@@ -174,6 +176,8 @@ async def delete_chat_room(
     Eliminar una sala de chat (requiere JWT y validación de acceso)
 
     - **room_id**: ID de la sala
+
+    Elimina en cascada: attachments → messages → participants → chat_room
     """
     # Verificar que la sala existe
     chat_room = db.query(ChatRoom).filter(ChatRoom.id == room_id).first()
@@ -195,6 +199,22 @@ async def delete_chat_room(
             detail="You are not a participant of this chat room"
         )
 
+    # Eliminar todo en el orden correcto para evitar violaciones de foreign key
+
+    # 1. Obtener todos los mensajes de este room
+    messages = db.query(Message).filter(Message.room_id == room_id).all()
+
+    # 2. Para cada mensaje, eliminar sus attachments
+    for message in messages:
+        db.query(Attachment).filter(Attachment.message_id == message.id).delete()
+
+    # 3. Eliminar todos los mensajes
+    db.query(Message).filter(Message.room_id == room_id).delete()
+
+    # 4. Eliminar todos los participantes
+    db.query(RoomParticipant).filter(RoomParticipant.room_id == room_id).delete()
+
+    # 5. Finalmente eliminar el chat room
     db.delete(chat_room)
     db.commit()
 

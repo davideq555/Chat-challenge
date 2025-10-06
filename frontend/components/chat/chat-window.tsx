@@ -14,10 +14,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Send, Paperclip, ImageIcon, File, Smile, MoreVertical, ArrowLeft, UserPlus } from "lucide-react"
+import { Send, Paperclip, ImageIcon, File, Smile, MoreVertical, ArrowLeft, UserPlus, Edit, Trash2 } from "lucide-react"
 import { MessageBubble } from "./message-bubble"
 import { FileUploadDialog } from "./file-upload-dialog"
 import { AddParticipantDialog } from "./add-participant-dialog"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import type { Conversation, User, Message } from "./chat-layout"
 import { websocketService } from "@/lib/websocket"
 import { useWebSocket } from "@/hooks/use-websocket"
@@ -41,6 +42,10 @@ export function ChatWindow({ selectedConversation, currentUser, onBack }: ChatWi
   const [uploadType, setUploadType] = useState<"image" | "document">("image")
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false)
   const [addParticipantOpen, setAddParticipantOpen] = useState(false)
+  const [editingMessage, setEditingMessage] = useState<{id: string, content: string} | null>(null)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [messageToDelete, setMessageToDelete] = useState<string | null>(null)
+  const [deleteChatConfirmOpen, setDeleteChatConfirmOpen] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const typingTimeoutRef = useRef<NodeJS.Timeout>()
 
@@ -97,6 +102,18 @@ export function ChatWindow({ selectedConversation, currentUser, onBack }: ChatWi
 
         return [...prev, newMessage]
       })
+    } else if (message.type === "message_updated" && selectedConversation) {
+      // Actualizar mensaje editado en tiempo real
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === message.messageId
+            ? { ...msg, content: message.content || msg.content }
+            : msg
+        )
+      )
+    } else if (message.type === "message_deleted" && selectedConversation) {
+      // Remover mensaje eliminado en tiempo real
+      setMessages((prev) => prev.filter((msg) => msg.id !== message.messageId))
     } else if (message.type === "typing" && selectedConversation) {
       if (message.data?.senderId === selectedConversation.user.id) {
         setIsTyping(message.data.isTyping)
@@ -180,7 +197,40 @@ export function ChatWindow({ selectedConversation, currentUser, onBack }: ChatWi
   const handleSendMessage = async () => {
     if (!messageInput.trim() || !selectedConversation) return
 
-    const content = messageInput
+    const content = messageInput.trim()
+
+    // Modo edición
+    if (editingMessage) {
+      try {
+        const response = await apiClient.updateMessage(parseInt(editingMessage.id), content)
+
+        // Actualizar mensaje en la UI local
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === editingMessage.id
+              ? { ...msg, content: response.content, timestamp: response.updated_at || msg.timestamp }
+              : msg
+          )
+        )
+
+        // Limpiar estado de edición
+        setEditingMessage(null)
+        setMessageInput("")
+
+        // Notificar via WebSocket
+        websocketService.send({
+          type: "message_updated",
+          messageId: editingMessage.id,
+          content: content,
+        })
+      } catch (error) {
+        console.error("Error editing message:", error)
+        alert("Error al editar el mensaje")
+      }
+      return
+    }
+
+    // Modo envío normal
     setMessageInput("")
 
     // Optimistic update: agregar mensaje localmente inmediatamente
@@ -264,6 +314,9 @@ export function ChatWindow({ selectedConversation, currentUser, onBack }: ChatWi
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
       handleSendMessage()
+    } else if (e.key === "Escape" && editingMessage) {
+      e.preventDefault()
+      handleCancelEdit()
     }
   }
 
@@ -305,6 +358,91 @@ export function ChatWindow({ selectedConversation, currentUser, onBack }: ChatWi
   const handleParticipantAdded = () => {
     // Optionally refresh room participants or show notification
     console.log("Participante añadido exitosamente")
+  }
+
+  const handleDeleteChatClick = () => {
+    // Solo permitir eliminar chats NO grupales
+    if (selectedConversation?.isGroup) {
+      alert("No se pueden eliminar chats grupales por el momento")
+      return
+    }
+    setDeleteChatConfirmOpen(true)
+  }
+
+  const confirmDeleteChat = async () => {
+    if (!selectedConversation) return
+
+    try {
+      const token = localStorage.getItem('token')
+      console.log("Token present:", !!token)
+      console.log("Attempting to delete chat room:", selectedConversation.id)
+      console.log("Room ID type:", typeof selectedConversation.id)
+
+      await apiClient.deleteChatRoom(parseInt(selectedConversation.id))
+
+      console.log("Chat eliminado exitosamente")
+
+      // Redirigir o cerrar chat (llamar a onBack si existe)
+      if (onBack) {
+        onBack()
+      }
+    } catch (error: any) {
+      console.error("Error deleting chat:", error)
+      console.error("Error details:", {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+      })
+
+      // Mostrar mensaje más descriptivo
+      let errorMessage = "Error desconocido"
+      if (error.message) {
+        errorMessage = error.message
+      } else if (error.toString().includes("NetworkError")) {
+        errorMessage = "Error de red. Verifica tu conexión o que el servidor esté corriendo."
+      }
+
+      alert(`Error al eliminar la conversación: ${errorMessage}`)
+    }
+  }
+
+  const handleEditMessage = (messageId: string, content: string) => {
+    // Poner el mensaje en modo edición (estilo WhatsApp)
+    setEditingMessage({ id: messageId, content })
+    setMessageInput(content)
+  }
+
+  const handleCancelEdit = () => {
+    setEditingMessage(null)
+    setMessageInput("")
+  }
+
+  const handleDeleteMessage = (messageId: string) => {
+    // Abrir modal de confirmación
+    setMessageToDelete(messageId)
+    setDeleteConfirmOpen(true)
+  }
+
+  const confirmDeleteMessage = async () => {
+    if (!messageToDelete) return
+
+    try {
+      await apiClient.deleteMessage(parseInt(messageToDelete), false) // soft delete por defecto
+
+      // Remover mensaje de la UI local (o marcarlo como eliminado)
+      setMessages((prev) => prev.filter((msg) => msg.id !== messageToDelete))
+
+      // Notificar via WebSocket
+      websocketService.send({
+        type: "message_deleted",
+        messageId: messageToDelete,
+      })
+    } catch (error) {
+      console.error("Error deleting message:", error)
+      alert("Error al eliminar el mensaje")
+    } finally {
+      setMessageToDelete(null)
+    }
   }
 
   const getInitials = (username: string) => {
@@ -385,6 +523,14 @@ export function ChatWindow({ selectedConversation, currentUser, onBack }: ChatWi
               <UserPlus className="h-4 w-4 mr-2" />
               Añadir participante
             </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={handleDeleteChatClick}
+              disabled={isGroup}
+              className="text-destructive focus:text-destructive"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Eliminar conversación
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -404,6 +550,8 @@ export function ChatWindow({ selectedConversation, currentUser, onBack }: ChatWi
                 isOwn={message.senderId === currentUser.id.toString()}
                 isGroup={isGroup}
                 senderName={senderName}
+                onEdit={handleEditMessage}
+                onDelete={handleDeleteMessage}
               />
             )
           })}
@@ -413,22 +561,41 @@ export function ChatWindow({ selectedConversation, currentUser, onBack }: ChatWi
       </ScrollArea>
 
       {/* Input Area */}
-      <div className="shrink-0 border-t border-border bg-card p-4">
-        <div className="flex items-end gap-2 max-w-4xl mx-auto">
-          <div className="flex gap-1">
-            <Button variant="ghost" size="icon" title="Adjuntar archivo" onClick={handleDocumentUpload}>
-              <Paperclip className="h-5 w-5" />
+      <div className="shrink-0 border-t border-border bg-card">
+        {/* Barra de edición */}
+        {editingMessage && (
+          <div className="flex items-center justify-between px-4 py-2 bg-primary/10 border-b border-border">
+            <div className="flex items-center gap-2">
+              <Edit className="h-4 w-4 text-primary" />
+              <span className="text-sm font-medium">Editando mensaje</span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCancelEdit}
+              className="h-8"
+            >
+              Cancelar
             </Button>
           </div>
+        )}
 
-          <div className="flex-1 relative">
-            <Input
-              placeholder="Escribe un mensaje..."
-              value={messageInput}
-              onChange={handleInputChange}
-              onKeyDown={handleKeyDown}
-              className="pr-10"
-            />
+        <div className="p-4">
+          <div className="flex items-end gap-2 max-w-4xl mx-auto">
+            <div className="flex gap-1">
+              <Button variant="ghost" size="icon" title="Adjuntar archivo" onClick={handleDocumentUpload} disabled={!!editingMessage}>
+                <Paperclip className="h-5 w-5" />
+              </Button>
+            </div>
+
+            <div className="flex-1 relative">
+              <Input
+                placeholder={editingMessage ? "Editar mensaje..." : "Escribe un mensaje..."}
+                value={messageInput}
+                onChange={handleInputChange}
+                onKeyDown={handleKeyDown}
+                className="pr-10"
+              />
             <Popover open={emojiPickerOpen} onOpenChange={setEmojiPickerOpen}>
               <PopoverTrigger asChild>
                 <Button
@@ -449,6 +616,7 @@ export function ChatWindow({ selectedConversation, currentUser, onBack }: ChatWi
           <Button onClick={handleSendMessage} size="icon" disabled={!messageInput.trim()}>
             <Send className="h-5 w-5" />
           </Button>
+          </div>
         </div>
       </div>
 
@@ -466,6 +634,30 @@ export function ChatWindow({ selectedConversation, currentUser, onBack }: ChatWi
         onOpenChange={setAddParticipantOpen}
         roomId={selectedConversation.id}
         onParticipantAdded={handleParticipantAdded}
+      />
+
+      {/* Delete Message Confirmation Dialog */}
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        onOpenChange={setDeleteConfirmOpen}
+        onConfirm={confirmDeleteMessage}
+        title="Eliminar mensaje"
+        description="¿Estás seguro de que quieres eliminar este mensaje? Esta acción no se puede deshacer."
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        variant="destructive"
+      />
+
+      {/* Delete Chat Confirmation Dialog */}
+      <ConfirmDialog
+        open={deleteChatConfirmOpen}
+        onOpenChange={setDeleteChatConfirmOpen}
+        onConfirm={confirmDeleteChat}
+        title="Eliminar conversación"
+        description="¿Estás seguro de que quieres eliminar esta conversación? Se eliminarán todos los mensajes y no se puede deshacer."
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        variant="destructive"
       />
     </div>
   )
