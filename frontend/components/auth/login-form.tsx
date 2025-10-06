@@ -22,10 +22,32 @@ export function LoginForm() {
     password: "",
   })
 
+  const isValidEmail = (email: string) => {
+    // Simple email regex
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  }
+
+  const isValidPassword = (password: string) => {
+    return typeof password === "string" && password.length >= 8
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError("")
+
+    // Client-side validation
+    if (!isValidEmail(formData.email)) {
+      setError("Por favor ingresa un correo electrónico válido.")
+      setLoading(false)
+      return
+    }
+
+    if (!isValidPassword(formData.password)) {
+      setError("La contraseña debe tener al menos 8 caracteres.")
+      setLoading(false)
+      return
+    }
 
     try {
       const data = await apiClient.login(formData.email, formData.password)
@@ -67,6 +89,9 @@ export function LoginForm() {
               required
               disabled={loading}
             />
+            {!isValidEmail(formData.email) && formData.email.length > 0 && (
+              <p className="text-sm text-destructive mt-1">Ingresa un correo electrónico válido.</p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -95,9 +120,12 @@ export function LoginForm() {
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
+            {!isValidPassword(formData.password) && formData.password.length > 0 && (
+              <p className="text-sm text-destructive mt-1">La contraseña debe tener al menos 8 caracteres.</p>
+            )}
           </div>
 
-          <Button type="submit" className="w-full" disabled={loading}>
+          <Button type="submit" className="w-full" disabled={loading || !isValidEmail(formData.email) || !isValidPassword(formData.password)}>
             {loading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
