@@ -57,6 +57,8 @@ backend/
 │   └── test_attachments.py
 ├── alembic/                 # Database migrations
 │   └── versions/
+├── uploads/                 # Uploaded files (images, documents)
+│   └── .gitkeep             # Keep directory in git
 ├── .env                     # Environment variables
 ├── requirements.txt         # Python dependencies
 └── venv/                    # Virtual environment
@@ -68,7 +70,9 @@ backend/
 - **ChatRooms** - Can be 1-to-1 or group chats, contain messages
 - **RoomParticipants** - Many-to-many relationship between Users and ChatRooms (SECURITY)
 - **Messages** - Belong to a room and user, can have attachments, support soft delete
+  - Relationship: `Message.attachments` → `List[Attachment]` (lazy="joined")
 - **Attachments** - Belong to messages, store file URLs and types
+  - Relationship: `Attachment.message` → `Message` (back_populates="attachments")
 
 ### Key Architectural Patterns
 
@@ -102,8 +106,17 @@ backend/
    - **RoomParticipant** model controls access to rooms
    - Users must be participants to access room data
    - All room/message endpoints validate user participation
-   - `requesting_user_id` or `user_id` required in sensitive endpoints
+   - JWT authentication via `get_current_user` dependency
    - Returns 403 Forbidden if user is not a participant
+
+7. **File Upload System**:
+   - Files stored locally in `/uploads/` directory
+   - Hashed filenames: `{timestamp}_{sha256hash}_{uuid}.{ext}`
+   - Prevents name collisions and exposes file structure
+   - Served as static files via FastAPI `StaticFiles` mount
+   - Flow: Upload file → Get URL → Create message with attachment
+   - Maximum file size: 10MB
+   - Allowed types: images (jpg, png, gif, webp), documents (pdf, doc, docx)
 
 ## Development Commands
 
@@ -180,12 +193,14 @@ Once running, access:
 - `POST /users/login` - Authenticate user (SHA256 - needs JWT upgrade)
 
 ### Chat Rooms (`/chat-rooms`) - WITH SECURITY VALIDATION
-- `POST /chat-rooms/?creator_id={id}` - Create room (creator auto-added as participant)
+- `POST /chat-rooms/` - Create room (requires JWT, creator auto-added as participant)
 - `GET /chat-rooms/` - List ALL rooms (admin endpoint - consider restricting)
-- `GET /chat-rooms/my-rooms/{user_id}` - Get rooms where user is participant (SECURE)
-- `GET /chat-rooms/{room_id}?user_id={id}` - Get room (validates participation)
-- `PUT /chat-rooms/{room_id}?user_id={id}` - Update room (validates participation)
-- `DELETE /chat-rooms/{room_id}?user_id={id}` - Delete room (validates participation)
+- `GET /chat-rooms/my-rooms` - Get rooms where authenticated user is participant (SECURE)
+- `GET /chat-rooms/{room_id}` - Get room (validates participation via JWT)
+- `PUT /chat-rooms/{room_id}` - Update room (validates participation via JWT)
+- `DELETE /chat-rooms/{room_id}` - Delete room (requires JWT, validates participation)
+  - Cascade deletion: attachments → messages → participants → chat_room
+  - Ensures no orphaned data or foreign key violations
 
 ### Room Participants (`/chat-rooms/{room_id}/participants`)
 - `POST /chat-rooms/{room_id}/participants?user_id={id}` - Add participant
@@ -193,16 +208,26 @@ Once running, access:
 - `GET /chat-rooms/{room_id}/participants` - List participants
 
 ### Messages (`/messages`) - WITH SECURITY VALIDATION
-- `POST /messages/` - Create message (validates user is participant of room)
-- `GET /messages/?requesting_user_id={id}&room_id={id}` - List messages (validates access)
-- `GET /messages/{message_id}?requesting_user_id={id}` - Get message (validates access)
-- `PUT /messages/{message_id}?requesting_user_id={id}` - Update message (only author)
-- `DELETE /messages/{message_id}?requesting_user_id={id}` - Delete message (only author, soft/hard)
-- `POST /messages/{message_id}/restore?requesting_user_id={id}` - Restore deleted message (only author)
-- `GET /messages/room/{room_id}/latest?requesting_user_id={id}` - Get recent messages (validates access, uses cache)
+- `POST /messages/` - Create message (requires JWT, validates user is participant)
+  - Accepts optional `attachments[]` array with `{file_url, file_type}`
+  - Creates message and attachments in single transaction using `db.flush()`
+  - Response includes message with populated attachments array
+- `GET /messages/` - List messages (requires JWT, filter by room_id, user_id)
+- `GET /messages/{message_id}` - Get message (requires JWT, validates access)
+- `PUT /messages/{message_id}` - Update message content (requires JWT, only author)
+  - Broadcasts `message_updated` event via WebSocket
+- `DELETE /messages/{message_id}` - Delete message (requires JWT, only author, soft delete by default)
+  - Broadcasts `message_deleted` event via WebSocket
+- `POST /messages/{message_id}/restore` - Restore soft-deleted message (requires JWT, only author)
+- `GET /messages/room/{room_id}/latest` - Get recent messages (requires JWT, validates access, uses cache)
 
 ### Attachments (`/attachments`)
-- `POST /attachments/` - Create attachment
+- `POST /attachments/upload` - Upload file to server (requires JWT, max 10MB)
+  - Accepts: images (jpg, png, gif, webp) and documents (pdf, doc, docx)
+  - Returns: `{file_url, file_name, file_type, file_size}`
+  - Files saved with hashed names: `{timestamp}_{sha256hash}_{uuid}.{ext}`
+  - Stored in `/uploads/` directory, served as static files
+- `POST /attachments/` - Create attachment metadata (links file to message)
 - `GET /attachments/` - List attachments (filter by `message_id`, `file_type`)
 - `GET /attachments/{attachment_id}` - Get attachment
 - `PUT /attachments/{attachment_id}` - Update attachment
@@ -212,7 +237,14 @@ Once running, access:
 - `GET /attachments/stats/by-type` - Statistics by file type
 
 ### WebSockets
-- `ws://localhost:8000/ws/{room_id}?token={JWT}` - Real-time messaging (planned JWT auth)
+- `ws://localhost:8000/ws/{room_id}?token={JWT}` - Real-time messaging
+- Supported message types:
+  - `message` - New message received
+  - `message_updated` - Message edited by author
+  - `message_deleted` - Message deleted by author
+  - `typing` - User typing indicator
+  - `online` / `offline` - User status changes
+  - `join_room` / `leave_room` - Room membership events
 
 ## Security Features
 
@@ -234,10 +266,14 @@ Once running, access:
    - Ensures creator always has access to their created rooms
 
 ### Authentication
-- **Current**: SHA256 password hashing (simple implementation)
-- **TODO**: Upgrade to bcrypt + JWT tokens for production
-- **TODO**: Add JWT middleware for all protected endpoints
-- **TODO**: Implement refresh tokens
+- **JWT Authentication**: Implemented with access tokens
+  - Login endpoint returns `{access_token, user}` object
+  - Token stored in localStorage on frontend
+  - Protected endpoints use `get_current_user` dependency
+  - Token passed via `Authorization: Bearer <token>` header
+- **Password Hashing**: Currently SHA256 (TODO: upgrade to bcrypt)
+- **TODO**: Implement refresh tokens for better security
+- **TODO**: Add token expiration and renewal mechanism
 
 ## Database Schema
 
@@ -356,11 +392,67 @@ docker-compose up --build
 # - Redis: localhost:6379
 ```
 
-## Frontend Integration (Planned)
-- Frontend will be built with Next.js
-- CORS is configured to allow all origins (`allow_origins=["*"]`)
+## Frontend Integration
+
+### Technology Stack
+- **Next.js 14** - React framework with App Router
+- **TypeScript** - Type safety
+- **Tailwind CSS** - Styling
+- **shadcn/ui** - UI component library
+- **WebSocket Client** - Real-time communication
+
+### Key Features Implemented
+
+#### 1. File Upload System
+- **Flow**: Upload file → Get URL → Send message with attachment
+- Files uploaded to `POST /attachments/upload` before message creation
+- Frontend constructs full URLs: `http://localhost:8000/uploads/{filename}`
+- Supports images and documents (10MB max)
+- Preview for images before sending
+
+#### 2. Message Management
+- **Edit Messages** (WhatsApp-style):
+  - Click "Editar" → Message content loads into chat input
+  - Edit bar appears above input with "Cancelar" button
+  - Press Enter to save, Escape to cancel
+  - Updates via API and broadcasts to other users via WebSocket
+- **Delete Messages**:
+  - Click "Eliminar" → Custom confirmation modal appears
+  - Soft delete by default (can be restored)
+  - Broadcasts deletion to other users in real-time
+- **Message Bubbles**:
+  - Dynamic width based on content (not fixed 70%)
+  - Context menu (3 dots) appears on hover for own messages
+  - Only text messages can be edited (not attachments)
+
+#### 3. Conversation Management
+- **Delete Conversations**:
+  - Available in chat header dropdown menu
+  - Only enabled for 1-to-1 chats (disabled for group chats)
+  - Custom confirmation modal with destructive styling
+  - Backend deletes in cascade: attachments → messages → participants → room
+
+#### 4. UI Components
+- **ConfirmDialog**: Reusable confirmation modal component
+  - Based on shadcn/ui AlertDialog
+  - Supports `variant="destructive"` for delete actions
+  - Used for both message and chat deletion
+- **MessageBubble**: Smart message component
+  - Renders text, images, and documents differently
+  - Integrates attachments with timestamps
+  - Shows sender name in group chats
+
+#### 5. Real-time Sync
+- WebSocket handles:
+  - `message_updated` - Syncs edits across clients
+  - `message_deleted` - Removes messages in real-time
+  - Message type properly typed in frontend (`lib/websocket.ts`)
+
+### Configuration
 - API base URL: `http://localhost:8000`
 - WebSocket URL: `ws://localhost:8000/ws/{room_id}`
+- CORS configured to allow all origins: `allow_origins=["*"]`
+- JWT token stored in localStorage
 
 ## Important Notes for Development
 
@@ -395,12 +487,85 @@ docker-compose up --build
    - Follow existing patterns (see other routers)
    - Clean up Redis cache in tests
 
+### Important Implementation Notes
+
+#### Message with Attachments Flow
+```python
+# Backend (messages.py)
+message = Message(...)
+db.add(message)
+db.flush()  # Get message.id without committing
+
+if message_data.attachments:
+    for attachment_data in message_data.attachments:
+        attachment = Attachment(message_id=message.id, ...)
+        db.add(attachment)
+
+db.commit()  # Commit everything in one transaction
+```
+
+#### Cascade Deletion Order
+```python
+# Delete room (chat_rooms.py)
+# 1. Get all messages
+messages = db.query(Message).filter(Message.room_id == room_id).all()
+
+# 2. Delete attachments for each message
+for message in messages:
+    db.query(Attachment).filter(Attachment.message_id == message.id).delete()
+
+# 3. Delete messages
+db.query(Message).filter(Message.room_id == room_id).delete()
+
+# 4. Delete participants
+db.query(RoomParticipant).filter(RoomParticipant.room_id == room_id).delete()
+
+# 5. Delete room
+db.delete(chat_room)
+db.commit()
+```
+
+#### WebSocket Message Types (Frontend)
+```typescript
+// lib/websocket.ts
+type WebSocketMessage = {
+  type: "message" | "typing" | "online" | "offline" |
+        "join_room" | "leave_room" | "message_updated" | "message_deleted"
+  data?: any
+  content?: string
+  messageId?: string
+}
+```
+
+#### File Upload Security
+- Max file size: 10MB (enforced in backend)
+- Allowed MIME types validated server-side
+- Filenames hashed to prevent:
+  - Name collisions
+  - Path traversal attacks
+  - Information leakage about upload order/user
+- Files stored outside of code directory (`/uploads/`)
+- Consider implementing virus scanning for production
+
+### Completed Features ✅
+1. ✅ JWT authentication implemented (bcrypt + access tokens)
+2. ✅ File upload for attachments (images and documents, max 10MB)
+3. ✅ Static file serving from `/uploads/` directory
+4. ✅ Message editing with real-time sync via WebSocket
+5. ✅ Message deletion with real-time sync via WebSocket
+6. ✅ Cascade deletion for chat rooms (attachments → messages → participants → room)
+7. ✅ Frontend implemented with Next.js + TypeScript + Tailwind
+8. ✅ Custom UI components (ConfirmDialog, MessageBubble)
+9. ✅ WhatsApp-style message editing (edit in chat input)
+
 ### Known TODOs
-1. Upgrade to JWT authentication (bcrypt + tokens)
-2. Implement file upload for attachments
-3. Add WebSocket JWT authentication
-4. Implement rate limiting
-5. Add user roles (admin, moderator, user)
-6. Implement read receipts for messages
-7. Add typing indicators via WebSocket
-8. Frontend development with Next.js
+1. Upgrade password hashing from SHA256 to bcrypt
+2. Add WebSocket JWT authentication (currently uses query param)
+3. Implement rate limiting for API endpoints
+4. Add user roles (admin, moderator, user)
+5. Implement read receipts for messages
+6. Add typing indicators via WebSocket (partially implemented)
+7. File upload to cloud storage (S3, Cloudinary) instead of local `/uploads/`
+8. Hard delete for attachments when messages are deleted
+9. Image compression/resizing before upload
+10. Support for more file types (video, audio, etc.)
