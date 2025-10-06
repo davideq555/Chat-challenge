@@ -23,10 +23,11 @@ import type { Conversation, User, Message } from "./chat-layout"
 import { websocketService } from "@/lib/websocket"
 import { useWebSocket } from "@/hooks/use-websocket"
 import { apiClient } from "@/lib/api"
-import dynamic from "next/dynamic"
+import * as FerruccEmoji from "@ferrucc-io/emoji-picker"
 
-// Import EmojiPicker dynamically to avoid SSR issues
-const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false })
+// Use direct import of the library to measure baseline performance in dev/prod.
+// Normalize the export (some builds export named EmojiPicker, some default).
+const EmojiPicker: any = (FerruccEmoji as any).EmojiPicker || (FerruccEmoji as any).default || FerruccEmoji
 
 type ChatWindowProps = {
   selectedConversation: Conversation | null
@@ -41,13 +42,14 @@ export function ChatWindow({ selectedConversation, currentUser, onBack }: ChatWi
   const [fileDialogOpen, setFileDialogOpen] = useState(false)
   const [uploadType, setUploadType] = useState<"image" | "document">("image")
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false)
+  // No preload: using direct import to measure raw performance
   const [addParticipantOpen, setAddParticipantOpen] = useState(false)
   const [editingMessage, setEditingMessage] = useState<{id: string, content: string} | null>(null)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [messageToDelete, setMessageToDelete] = useState<string | null>(null)
   const [deleteChatConfirmOpen, setDeleteChatConfirmOpen] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const typingTimeoutRef = useRef<NodeJS.Timeout>()
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const ws = useWebSocket((message) => {
     if (message.type === "message" && selectedConversation) {
@@ -349,10 +351,13 @@ export function ChatWindow({ selectedConversation, currentUser, onBack }: ChatWi
     setFileDialogOpen(true)
   }
 
-  const handleEmojiClick = (emojiData: any) => {
-    // Insert emoji at cursor position
-    setMessageInput((prev) => prev + emojiData.emoji)
-    setEmojiPickerOpen(false)
+  const handleEmojiSelect = (payload: any) => {
+    // @ferrucc-io/emoji-picker may pass either a string or an object. Normalize.
+    const emoji = typeof payload === "string" ? payload : payload?.emoji || ""
+    if (emoji) {
+      setMessageInput((prev) => prev + emoji)
+      setEmojiPickerOpen(false)
+    }
   }
 
   const handleParticipantAdded = () => {
@@ -608,8 +613,27 @@ export function ChatWindow({ selectedConversation, currentUser, onBack }: ChatWi
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-full p-0 border-0" side="top" align="end">
-                <EmojiPicker onEmojiClick={handleEmojiClick} width={350} height={400} />
-              </PopoverContent>
+                <div className="emoji-picker-wrapper">
+                  <EmojiPicker
+                    className="border border-zinc-200 dark:border-zinc-800 rounded-lg"
+                    emojisPerRow={10}
+                    emojiSize={24}
+                    onEmojiSelect={handleEmojiSelect}
+                  >
+                    <EmojiPicker.Header className="p-2 pb-0">
+                      <EmojiPicker.Input
+                        placeholder="Buscar emoji"
+                        autoFocus={true}
+                        hideIcon
+                        className="focus:ring-2 focus:ring-inset ring-1 ring-transparent"
+                      />
+                    </EmojiPicker.Header>
+                    <EmojiPicker.Group>
+                      <EmojiPicker.List hideStickyHeader={true} containerHeight={400} />
+                    </EmojiPicker.Group>
+                  </EmojiPicker>
+                </div>
+            </PopoverContent>
             </Popover>
           </div>
 
