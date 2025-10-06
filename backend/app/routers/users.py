@@ -92,7 +92,8 @@ async def get_available_users_for_chat(
     # Obtener todos los usuarios EXCEPTO los excluidos
     available_users = db.query(User).filter(
         User.id.notin_(excluded_user_ids),
-        User.is_active == True
+        User.is_active == True,
+        User.is_public == True
     ).order_by(User.username).all()
 
     return available_users

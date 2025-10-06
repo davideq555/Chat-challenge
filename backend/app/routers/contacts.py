@@ -258,6 +258,7 @@ async def delete_contact(
     db.delete(contact)
     db.commit()
 
+#TODO mejorar el nombre del enpoint
 @router.get("/search-public-users", response_model=List[UserResponse])
 async def search_public_users(
     query: str = Query(..., min_length=1, description="Search query (username or email)"),
@@ -265,15 +266,13 @@ async def search_public_users(
     db: Session = Depends(get_db)
 ):
     """
-    Buscar usuarios públicos para agregar como contactos (requiere JWT)
+    Buscar todos los usuarios para agregar como contactos (requiere JWT)
 
-    - Solo retorna usuarios con is_public=True
     - No incluye al usuario actual
     - No incluye usuarios que ya son contactos
     """
     # Buscar usuarios públicos que coincidan con la búsqueda
     public_users = db.query(User).filter(
-        User.is_public == True,
         User.id != current_user.id,
         or_(
             User.username.ilike(f"%{query}%"),
