@@ -47,6 +47,60 @@ async def create_user(user_data: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
 
+    # Crear conversación 1-a-1 con el bot (usuario id=1) y enviar mensaje de bienvenida
+    try:
+        from app.models.chat_room import ChatRoom
+        from app.models.room_participant import RoomParticipant
+        from app.models.message import Message
+
+        bot_id = 1
+        bot_user = db.query(User).filter(User.id == bot_id).first()
+
+        # Si no existe el user id=1, intentar encontrar un bot por username común
+        if not bot_user:
+            bot_user = db.query(User).filter(User.username.in_(["WelcomeBot", "chatbot", "assistant"])).first()
+
+        if bot_user:
+            # Asegurar que usamos el id real del bot (por si se creó ahora)
+            bot_id = bot_user.id
+            # Buscar rooms 1-a-1 donde el bot participa
+            bot_rooms = db.query(RoomParticipant.room_id).join(ChatRoom, ChatRoom.id == RoomParticipant.room_id).filter(
+                RoomParticipant.user_id == bot_id,
+                ChatRoom.is_group.is_(False)
+            ).subquery()
+
+            # Verificar si ya existe una room compartida con el nuevo usuario
+            existing_part = db.query(RoomParticipant).filter(
+                RoomParticipant.room_id.in_(bot_rooms),
+                RoomParticipant.user_id == user.id
+            ).first()
+
+            if not existing_part:
+                # Crear la sala
+                room = ChatRoom(name=f"Chat con {bot_user.username}", is_group=False)
+                db.add(room)
+                db.commit()
+                db.refresh(room)
+
+                # Agregar participantes: bot y el nuevo usuario
+                rp_bot = RoomParticipant(room_id=room.id, user_id=bot_id)
+                rp_user = RoomParticipant(room_id=room.id, user_id=user.id)
+                db.add_all([rp_bot, rp_user])
+                db.commit()
+
+                # Mensaje de bienvenida enviado por el bot
+                welcome = (
+                    "¡Bienvenido/a! Soy el asistente de la aplicación. "
+                    "Aquí puedes: crear conversaciones, gestionar tus contactos, enviar archivos y ajustar tu visibilidad. "
+                    "Escribe un mensaje para comenzar. ¡Disfruta!"
+                )
+                msg = Message(room_id=room.id, user_id=bot_id, content=welcome)
+                db.add(msg)
+                db.commit()
+    except Exception as e:
+        # No queremos que falle la creación del usuario si algo sale mal con la conversación de bienvenida
+        print("Warning: could not create bot welcome conversation:", e)
+
     return user
 
 @router.get("/", response_model=List[UserResponse])
@@ -74,7 +128,7 @@ async def get_available_users_for_chat(
 
     # Obtener todas las rooms 1-to-1 donde el usuario actual es participante
     user_rooms_1to1 = db.query(ChatRoom.id).join(RoomParticipant).filter(
-        ChatRoom.is_group == False,
+        ChatRoom.is_group.is_(False),
         RoomParticipant.user_id == current_user.id
     ).subquery()
 
@@ -92,8 +146,8 @@ async def get_available_users_for_chat(
     # Obtener todos los usuarios EXCEPTO los excluidos
     available_users = db.query(User).filter(
         User.id.notin_(excluded_user_ids),
-        User.is_active == True,
-        User.is_public == True
+        User.is_active.is_(True),
+        User.is_public.is_(True)
     ).order_by(User.username).all()
 
     return available_users
@@ -150,7 +204,7 @@ async def get_available_users_for_room(
     # Obtener todos los usuarios EXCEPTO los que ya están en la sala
     available_users = db.query(User).filter(
         User.id.notin_(excluded_user_ids),
-        User.is_active == True
+        User.is_active.is_(True)
     ).order_by(User.username).all()
 
     return available_users
