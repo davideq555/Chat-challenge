@@ -165,10 +165,20 @@ class ApiClient {
     return this.request<any[]>(`/messages/room/${roomId}/latest?limit=${limit}`)
   }
 
-  async sendMessage(roomId: number, content: string) {
+  async sendMessage(
+    roomId: number,
+    content: string,
+    attachments?: Array<{ file_url: string; file_type: string }>
+  ) {
+    const body: any = { room_id: roomId, content }
+
+    if (attachments && attachments.length > 0) {
+      body.attachments = attachments
+    }
+
     return this.request<any>('/messages/', {
       method: 'POST',
-      body: JSON.stringify({ room_id: roomId, content }),
+      body: JSON.stringify(body),
     })
   }
 
@@ -179,6 +189,27 @@ class ApiClient {
   }
 
   // Attachments
+  async uploadFile(file: File) {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const token = this.getToken()
+    const response = await fetch(`${this.baseUrl}/attachments/upload`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Error uploading file' }))
+      throw new Error(error.detail || `HTTP ${response.status}`)
+    }
+
+    return response.json()
+  }
+
   async uploadAttachment(messageId: number, fileUrl: string, fileName: string, fileType: string, fileSize: number) {
     return this.request<any>('/attachments/', {
       method: 'POST',

@@ -1,8 +1,10 @@
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from pathlib import Path
 
 from app.routers import users, chat_rooms, messages, attachments, websocket, contacts
 from app.database import get_db
@@ -34,6 +36,11 @@ app.include_router(messages.router)
 app.include_router(attachments.router)
 app.include_router(contacts.router)
 app.include_router(websocket.router)  # WebSocket router
+
+# Configurar directorio de archivos estáticos (uploads)
+UPLOAD_DIR = Path("uploads")
+UPLOAD_DIR.mkdir(exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
 # Evento de inicio: crear datos por defecto
 @app.on_event("startup")

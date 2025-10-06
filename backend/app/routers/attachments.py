@@ -1,8 +1,11 @@
-from fastapi import APIRouter, HTTPException, status, Query, Depends
+from fastapi import APIRouter, HTTPException, status, Query, Depends, UploadFile, File
 from typing import List
 from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+import hashlib
+import uuid
+from pathlib import Path
 
 from app.schemas.attachment import AttachmentCreate, AttachmentUpdate, AttachmentResponse
 from app.models.attachment import Attachment
@@ -16,6 +19,100 @@ router = APIRouter(
     prefix="/attachments",
     tags=["attachments"]
 )
+
+# Configuración de archivos
+UPLOAD_DIR = Path("uploads")
+UPLOAD_DIR.mkdir(exist_ok=True)
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+
+# Tipos de archivo permitidos
+ALLOWED_MIME_TYPES = {
+    # Imágenes
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/gif": ".gif",
+    "image/webp": ".webp",
+    # Documentos
+    "application/pdf": ".pdf",
+    "application/msword": ".doc",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+}
+
+
+def get_file_type_category(content_type: str) -> str:
+    """Determinar categoría del archivo (image o document)"""
+    if content_type.startswith("image/"):
+        return "image"
+    return "document"
+
+
+def generate_hashed_filename(original_filename: str, content: bytes) -> str:
+    """Generar nombre único usando hash del contenido + UUID"""
+    extension = Path(original_filename).suffix.lower()
+    file_hash = hashlib.sha256(content).hexdigest()[:16]
+    unique_id = str(uuid.uuid4())[:8]
+    timestamp = datetime.now().strftime("%Y%m%d")
+    return f"{timestamp}_{file_hash}_{unique_id}{extension}"
+
+
+@router.post("/upload", status_code=status.HTTP_201_CREATED)
+async def upload_file(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Subir un archivo al servidor (requiere JWT)
+
+    - **file**: Archivo a subir (imágenes: jpg, png, gif, webp | documentos: pdf, doc, docx)
+    - Tamaño máximo: 10MB
+
+    Retorna información del archivo incluyendo file_url para usar en mensajes
+    """
+    # Validar tipo MIME
+    if file.content_type not in ALLOWED_MIME_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File type not allowed. Allowed: images (jpg, png, gif, webp) and documents (pdf, doc, docx)"
+        )
+
+    # Leer contenido del archivo
+    contents = await file.read()
+
+    # Validar tamaño
+    if len(contents) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File too large. Maximum size: {MAX_FILE_SIZE / 1024 / 1024}MB"
+        )
+
+    # Generar nombre hasheado único
+    hashed_filename = generate_hashed_filename(file.filename or "file", contents)
+    file_path = UPLOAD_DIR / hashed_filename
+
+    # Guardar archivo en el servidor
+    try:
+        with open(file_path, "wb") as f:
+            f.write(contents)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error saving file: {str(e)}"
+        )
+
+    # Determinar categoría del archivo
+    file_type = get_file_type_category(file.content_type)
+
+    # Construir URL del archivo (será servida por FastAPI static files)
+    file_url = f"/uploads/{hashed_filename}"
+
+    return {
+        "file_url": file_url,
+        "file_name": file.filename,
+        "file_type": file_type,
+        "file_size": len(contents)
+    }
+
 
 @router.post("/", response_model=AttachmentResponse, status_code=status.HTTP_201_CREATED)
 async def create_attachment(

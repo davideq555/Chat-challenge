@@ -1,7 +1,7 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from sqlalchemy import String, Boolean, DateTime, Integer, ForeignKey, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from . import Base
 
 class Message(Base):
@@ -15,6 +15,9 @@ class Message(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, nullable=False)
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # Relación con attachments
+    attachments: Mapped[List["Attachment"]] = relationship("Attachment", back_populates="message", lazy="joined")
 
     def to_dict(self):
         return {

@@ -1,6 +1,6 @@
 from datetime import datetime
 from sqlalchemy import String, DateTime, ForeignKey
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from . import Base
 
 class Attachment(Base):
@@ -12,6 +12,9 @@ class Attachment(Base):
     file_url: Mapped[str] = mapped_column(String(500), nullable=False)
     file_type: Mapped[str] = mapped_column(String(50), nullable=False)
     uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, nullable=False)
+
+    # Relación con message
+    message: Mapped["Message"] = relationship("Message", back_populates="attachments")
 
     def to_dict(self):
         return {

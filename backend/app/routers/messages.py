@@ -6,6 +6,7 @@ import logging
 
 from app.schemas.message import MessageCreate, MessageCreateRequest, MessageUpdate, MessageResponse
 from app.models.message import Message
+from app.models.attachment import Attachment
 from app.models.room_participant import RoomParticipant
 from app.models.chat_room import ChatRoom
 from app.models.user import User
@@ -29,7 +30,8 @@ async def create_message(
     """
     Crear un nuevo mensaje (requiere JWT y validación de acceso)
 
-    El usuario autenticado debe ser participante de la sala para enviar mensajes
+    El usuario autenticado debe ser participante de la sala para enviar mensajes.
+    Puede incluir adjuntos opcionales que se crearán junto con el mensaje.
     """
     # Validar que la sala existe
     room = db.query(ChatRoom).filter(ChatRoom.id == message_data.room_id).first()
@@ -51,6 +53,7 @@ async def create_message(
             detail="You are not a participant of this chat room"
         )
 
+    # Crear el mensaje
     message = Message(
         room_id=message_data.room_id,
         user_id=current_user.id,
@@ -59,6 +62,19 @@ async def create_message(
     )
 
     db.add(message)
+    db.flush()  # Obtener el ID sin hacer commit aún
+
+    # Crear adjuntos si existen
+    if message_data.attachments:
+        for attachment_data in message_data.attachments:
+            attachment = Attachment(
+                message_id=message.id,
+                file_url=attachment_data.file_url,
+                file_type=attachment_data.file_type
+            )
+            db.add(attachment)
+
+    # Hacer commit de todo en una transacción
     db.commit()
     db.refresh(message)
 

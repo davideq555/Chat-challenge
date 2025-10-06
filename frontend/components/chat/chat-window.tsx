@@ -49,6 +49,23 @@ export function ChatWindow({ selectedConversation, currentUser, onBack }: ChatWi
       // Backend sends message data inside "data" property
       const msgData = message.data
 
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
+      // Determinar tipo de mensaje basado en adjuntos
+      let messageType: "text" | "image" | "document" = "text"
+      let fileUrl: string | undefined
+      let fileName: string | undefined
+
+      if (msgData?.attachments && msgData.attachments.length > 0) {
+        const attachment = msgData.attachments[0]
+        // Construir URL completa
+        fileUrl = attachment.file_url.startsWith('http')
+          ? attachment.file_url
+          : `${API_URL}${attachment.file_url}`
+        messageType = attachment.file_type === "image" ? "image" : "document"
+        fileName = fileUrl.split('/').pop() || 'file'
+      }
+
       // Transform backend message to frontend format
       const newMessage: Message = {
         id: msgData?.id?.toString() || Date.now().toString(),
@@ -56,7 +73,9 @@ export function ChatWindow({ selectedConversation, currentUser, onBack }: ChatWi
         senderId: msgData?.user_id?.toString() || "",
         receiverId: selectedConversation.user.id,
         timestamp: msgData?.created_at || new Date().toISOString(),
-        type: "text",
+        type: messageType,
+        fileUrl,
+        fileName,
       }
 
       // Evitar duplicados: verificar si ya existe un mensaje con mismo contenido y sender reciente
@@ -112,16 +131,39 @@ export function ChatWindow({ selectedConversation, currentUser, onBack }: ChatWi
 
       // Load latest messages from backend
       const messages = await apiClient.getLatestMessages(roomId, 50)
+
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
       // Transform backend messages to frontend format
-      const transformedMessages: Message[] = messages.map((msg: any) => ({
-        id: msg.id.toString(),
-        content: msg.content,
-        senderId: msg.user_id.toString(),
-        receiverId: userId,
-        timestamp: msg.created_at,
-        type: "text" as const,
-        isDeleted: msg.is_deleted,
-      }))
+      const transformedMessages: Message[] = messages.map((msg: any) => {
+        // Determinar tipo de mensaje basado en adjuntos
+        let messageType: "text" | "image" | "document" = "text"
+        let fileUrl: string | undefined
+        let fileName: string | undefined
+
+        if (msg.attachments && msg.attachments.length > 0) {
+          const attachment = msg.attachments[0]
+          // Construir URL completa
+          fileUrl = attachment.file_url.startsWith('http')
+            ? attachment.file_url
+            : `${API_URL}${attachment.file_url}`
+          messageType = attachment.file_type === "image" ? "image" : "document"
+          // Extraer nombre del archivo de la URL si es posible
+          fileName = fileUrl.split('/').pop() || 'file'
+        }
+
+        return {
+          id: msg.id.toString(),
+          content: msg.content,
+          senderId: msg.user_id.toString(),
+          receiverId: userId,
+          timestamp: msg.created_at,
+          type: messageType,
+          isDeleted: msg.is_deleted,
+          fileUrl,
+          fileName,
+        }
+      })
 
       setMessages(transformedMessages)
     } catch (error) {
@@ -172,52 +214,48 @@ export function ChatWindow({ selectedConversation, currentUser, onBack }: ChatWi
     if (!selectedConversation) return
 
     try {
-      // Upload file to server
-      const formData = new FormData()
-      formData.append("file", file)
-      formData.append("receiverId", selectedConversation.user.id)
-      formData.append("caption", caption)
+      // 1. Subir archivo al servidor
+      const uploadResponse = await apiClient.uploadFile(file)
 
-      const response = await fetch("/api/upload", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
+      // 2. Usar caption o "Adjunto" por defecto si está vacío
+      const messageContent = caption.trim() || "Adjunto"
+
+      // 3. Enviar mensaje con adjunto al backend
+      const roomId = parseInt(selectedConversation.id)
+      const response = await apiClient.sendMessage(roomId, messageContent, [
+        {
+          file_url: uploadResponse.file_url,
+          file_type: uploadResponse.file_type,
         },
-        body: formData,
-      })
+      ])
 
-      if (!response.ok) {
-        throw new Error("Upload failed")
-      }
+      // 4. Construir URL completa del archivo
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const fullFileUrl = uploadResponse.file_url.startsWith('http')
+        ? uploadResponse.file_url
+        : `${API_URL}${uploadResponse.file_url}`
 
-      const data = await response.json()
-
-      // Create message with file
+      // 5. Agregar mensaje a la UI local (con datos del backend)
       const newMessage: Message = {
-        id: Date.now().toString(),
-        content: caption,
-        senderId: currentUser.id,
+        id: response.id.toString(),
+        content: response.content,
+        senderId: response.user_id.toString(),
         receiverId: selectedConversation.user.id,
-        timestamp: new Date().toISOString(),
-        type: file.type.startsWith("image/") ? "image" : "document",
-        fileUrl: data.fileUrl,
+        timestamp: response.created_at,
+        type: uploadResponse.file_type === "image" ? "image" : "document",
+        fileUrl: fullFileUrl,
         fileName: file.name,
       }
 
-      setMessages([...messages, newMessage])
-      websocketService.sendMessage(newMessage)
+      setMessages((prev) => [...prev, newMessage])
 
-      // Save message to database
-      await fetch("/api/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify(newMessage),
+      // 6. Enviar por WebSocket para notificar a otros usuarios
+      websocketService.send({
+        type: "message",
+        content: messageContent,
       })
     } catch (error) {
-      console.error("[v0] Error uploading file:", error)
+      console.error("Error uploading file:", error)
       throw error
     }
   }

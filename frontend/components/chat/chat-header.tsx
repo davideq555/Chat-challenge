@@ -48,7 +48,7 @@ export function ChatHeader({ currentUser }: ChatHeaderProps) {
       </div>
 
       <div className="flex items-center gap-2">
-        {/* {/* <ThemeToggle /> */} */}
+        {/* <ThemeToggle /> */}
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
