@@ -11,6 +11,7 @@ from app.models.user import User
 from app.models.chat_room import ChatRoom
 from app.models.room_participant import RoomParticipant
 from app.models.contact import Contact
+from app.models.message import Message
 from app.database import SessionLocal
 from app.auth.password import hash_password
 
@@ -143,6 +144,32 @@ def init_default_data():
         else:
             logger.info("ℹ️  TestUser2 ya es participante de la sala de bienvenida")
 
+        # 4b. Agregar mensaje de bienvenida enviado por el bot hacia la sala de bienvenida
+        try:
+            welcome_text = (
+                "¡Bienvenido/a! Soy el asistente de la aplicación. "
+                "Aquí puedes: crear conversaciones, gestionar tus contactos, enviar archivos y ajustar tu visibilidad. "
+                "Escribe un mensaje para comenzar. ¡Disfruta!"
+            )
+            # Evitar duplicados: si el bot ya envió un mensaje que contiene 'Bienvenido', no volver a agregar
+            existing_welcome = db.query(Message).filter(
+                Message.room_id == welcome_room.id,
+                Message.user_id == bot_user.id
+            ).first()
+
+            if not existing_welcome:
+                welcome_msg = Message(
+                    room_id=welcome_room.id,
+                    user_id=bot_user.id,
+                    content=welcome_text
+                )
+                db.add(welcome_msg)
+                logger.info("✅ Mensaje de bienvenida agregado a la sala de bienvenida")
+            else:
+                logger.info("ℹ️  Mensaje de bienvenida ya existe en la sala de bienvenida")
+        except Exception as e:
+            logger.error(f"❌ Error creando mensaje de bienvenida: {e}", exc_info=True)
+
         # 5. Crear contacto pendiente entre TestUser y TestUser2
         contact_1_to_2 = db.query(Contact).filter(
             Contact.user_id == test_user.id,
@@ -158,6 +185,40 @@ def init_default_data():
             logger.info("✅ Solicitud de contacto creada: TestUser → TestUser2 (pending)")
         else:
             logger.info("ℹ️  Solicitud de contacto ya existe: TestUser → TestUser2")
+
+        # 5b. Crear (si no existe) sala 1-a-1 entre TestUser y TestUser2 y añadir mensaje de bienvenida
+        try:
+            # Buscar rooms donde TestUser es participante
+            rooms_user1 = db.query(RoomParticipant.room_id).filter(RoomParticipant.user_id == test_user.id).subquery()
+
+            # Buscar una room 1-a-1 compartida con TestUser2
+            existing_1to1 = db.query(ChatRoom).join(RoomParticipant, RoomParticipant.room_id == ChatRoom.id).filter(
+                ChatRoom.id.in_(rooms_user1),
+                ChatRoom.is_group.is_(False),
+                RoomParticipant.user_id == test_user2.id
+            ).first()
+
+            if existing_1to1:
+                room_1to1 = existing_1to1
+                logger.info(f"ℹ️  Sala 1-a-1 ya existe entre TestUser y TestUser2 (ID: {room_1to1.id})")
+            else:
+                room_1to1 = ChatRoom(name=f"Chat {test_user.username} & {test_user2.username}", is_group=False)
+                db.add(room_1to1)
+                db.commit()
+                db.refresh(room_1to1)
+                logger.info(f"✅ Sala 1-a-1 creada entre TestUser y TestUser2 (ID: {room_1to1.id})")
+
+                # Agregar participantes si no existen
+                rp1 = db.query(RoomParticipant).filter(RoomParticipant.room_id == room_1to1.id, RoomParticipant.user_id == test_user.id).first()
+                if not rp1:
+                    db.add(RoomParticipant(room_id=room_1to1.id, user_id=test_user.id))
+                rp2 = db.query(RoomParticipant).filter(RoomParticipant.room_id == room_1to1.id, RoomParticipant.user_id == test_user2.id).first()
+                if not rp2:
+                    db.add(RoomParticipant(room_id=room_1to1.id, user_id=test_user2.id))
+                logger.info("✅ Participantes agregados a la sala 1-a-1 entre TestUser y TestUser2")
+
+        except Exception as e:
+            logger.error(f"❌ Error creando sala 1-a-1 o mensaje entre TestUser y TestUser2: {e}", exc_info=True)
 
         db.commit()
 

@@ -46,31 +46,22 @@ Rellenar los ejemplos en `backend/.env.example` y `frontend/.env.local.example` 
 docker-compose up --build
 ```
 
-4) Si necesitas ejecutar migraciones con Alembic (hacer esto la primera vez):
-
-```bash
-docker-compose run --rm backend alembic upgrade head
-```
-
 Servicios que se levantan
 - Backend (FastAPI) → http://localhost:8000
 - Frontend (Next.js) → http://localhost:3000
 - PostgreSQL → localhost:5432
 - Redis → localhost:6379
 
-4) Ejecutar en desarrollo sin Docker (opcional)
 
-- Backend
-  - Ir a `backend/` y crear un virtualenv
-  - Instalar dependencias: `pip install -r requirements.txt`
-  - Configurar `backend/.env` basado en `backend/.env.example`
-  - Ejecutar: `uvicorn app.main:app --reload --port 8000`
+4) Si necesitas ejecutar migraciones con Alembic (hacer esto la primera vez):
 
-- Frontend
-  - Ir a `frontend/`
-  - Instalar dependencias: `pnpm install`
-  - Copiar `frontend/.env.local.example` a `.env.local` y ajustar si es necesario
-  - Ejecutar: `pnpm dev`
+```bash
+docker-compose run --rm backend alembic upgrade head
+```
+
+5) Usuarios de prueba para testear
+Correos: test@example.com y test2@example.com
+Contraseña en ambos: pass1234
 
 Características principales (resumen)
 - Registro e inicio de sesión con JWT
