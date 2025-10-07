@@ -46,6 +46,12 @@ Rellenar los ejemplos en `backend/.env.example` y `frontend/.env.local.example` 
 docker-compose up --build
 ```
 
+4) Si necesitas ejecutar migraciones con Alembic (hacer esto la primera vez):
+
+```bash
+docker-compose run --rm backend alembic upgrade head
+```
+
 Servicios que se levantan
 - Backend (FastAPI) → http://localhost:8000
 - Frontend (Next.js) → http://localhost:3000
